@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Ingredient, Meal, MealPlan } from '@prisma/client';
 
@@ -5,15 +6,12 @@ import type { Ingredient, Meal, MealPlan } from '@prisma/client';
  * groceryEngine — génération atomique de la liste de courses à partir
  * de la planification des plats.
  *
- * Invariant :
- *  - addContributions(plan, ingredients)     → pour chaque ingrédient mis à l'échelle,
- *    on récupère (ou crée) l'item non-archivé correspondant (name+unit+aisle) et on
- *    incrémente sa quantité + on crée une contribution liée au plan.
- *  - removeContributions(plan)               → on décrémente les quantités, on supprime
- *    les contributions, et on supprime les items devenus orphelins (plus aucune
- *    contribution ET non manuels).
+ * Toutes les opérations s'exécutent à l'intérieur d'une transaction Prisma
+ * (timeout allongé à 30 s pour le free tier Render → latence Supabase).
  *
- * Toutes les opérations s'exécutent à l'intérieur d'une transaction Prisma.
+ * Les écritures sont BATCHÉES (createMany) plutôt que bouclées ingrédient par
+ * ingrédient, afin d'éviter le pattern N+1 qui faisait dépasser le timeout
+ * (erreur P2028) sur les repas à beaucoup d'ingrédients.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -23,6 +21,8 @@ export function scaleQuantity(qty: number, planServings: number, mealServings: n
   const base = mealServings <= 0 ? 1 : mealServings;
   return Math.round((qty * (planServings / base)) * 1000) / 1000;
 }
+
+const itemKey = (name: string, unit: string, aisle: string) => `${name}\u0000${unit}\u0000${aisle}`;
 
 /** Crée le plan + ajoute les contributions de ses ingrédients (transaction). */
 export async function planMeal(
@@ -38,13 +38,7 @@ export async function planMeal(
   const { meal, fromDate, toDate, servings, status } = params;
 
   const plan = await tx.mealPlan.create({
-    data: {
-      mealId: meal.id,
-      fromDate,
-      toDate,
-      servings,
-      status,
-    },
+    data: { mealId: meal.id, fromDate, toDate, servings, status },
   });
 
   await addContributions(tx, {
@@ -57,7 +51,7 @@ export async function planMeal(
   return plan;
 }
 
-/** Ajoute les contributions d'ingrédients pour un plan donné. */
+/** Ajoute les contributions d'ingrédients pour un plan donné (version batch). */
 async function addContributions(
   tx: Tx,
   args: {
@@ -69,78 +63,120 @@ async function addContributions(
 ): Promise<void> {
   const { mealPlanId, ingredients, planServings, mealServings } = args;
 
-  for (const ing of ingredients) {
-    const scaled = scaleQuantity(ing.quantity, planServings, mealServings);
-    if (scaled <= 0) continue;
+  // Ingrédients mis à l'échelle (on ignore les quantités nulles).
+  const scaled = ingredients
+    .map((ing) => ({ ing, qty: scaleQuantity(ing.quantity, planServings, mealServings) }))
+    .filter((x) => x.qty > 0);
+  if (scaled.length === 0) return;
 
-    // Recherche d'un item actif (non archivé) correspondant.
-    let item = await tx.groceryItem.findFirst({
-      where: { name: ing.name, unit: ing.unit, aisle: ing.aisle, archived: false },
-    });
+  // 1) Charge tous les items actifs en UNE requête (set petit pour un usage perso).
+  const activeItems = await tx.groceryItem.findMany({ where: { archived: false } });
+  const itemIdByKey = new Map<string, string>();
+  for (const it of activeItems) itemIdByKey.set(itemKey(it.name, it.unit, it.aisle), it.id);
 
-    if (!item) {
-      item = await tx.groceryItem.create({
-        data: {
-          name: ing.name,
-          unit: ing.unit,
-          aisle: ing.aisle,
-          quantity: 0,
-          isManual: false,
-        },
-      });
+  // 2) Répartit en mémoire : nouveaux items / deltas sur items existants / contributions.
+  const newItems: Array<{
+    id: string;
+    name: string;
+    unit: string;
+    aisle: string;
+    quantity: number;
+    isManual: boolean;
+  }> = [];
+  const contributionsToCreate: Array<{
+    groceryItemId: string;
+    mealPlanId: string;
+    ingredientId: string;
+    quantity: number;
+  }> = [];
+  const existingDeltas = new Map<string, number>(); // itemId -> quantité à incrémenter
+  const aislesToEnsure = new Set<string>();
+
+  for (const { ing, qty } of scaled) {
+    aislesToEnsure.add(ing.aisle);
+    const key = itemKey(ing.name, ing.unit, ing.aisle);
+    const existingId = itemIdByKey.get(key);
+    if (existingId) {
+      existingDeltas.set(existingId, (existingDeltas.get(existingId) ?? 0) + qty);
+      contributionsToCreate.push({ groceryItemId: existingId, mealPlanId, ingredientId: ing.id, quantity: qty });
+    } else {
+      // Nouvel item : UUID généré pour pouvoir lier la contribution + dédupliquer.
+      const id = randomUUID();
+      itemIdByKey.set(key, id);
+      newItems.push({ id, name: ing.name, unit: ing.unit, aisle: ing.aisle, quantity: qty, isManual: false });
+      contributionsToCreate.push({ groceryItemId: id, mealPlanId, ingredientId: ing.id, quantity: qty });
     }
+  }
 
-    // On crée la contribution et on incrémente la quantité de l'item.
-    await tx.groceryContribution.create({
-      data: {
-        groceryItemId: item.id,
-        mealPlanId,
-        ingredientId: ing.id,
-        quantity: scaled,
-      },
-    });
+  // 3) Écritures en lot (createMany) — l'ordre compte : items avant contributions.
+  if (newItems.length > 0) {
+    await tx.groceryItem.createMany({ data: newItems });
+  }
+  if (contributionsToCreate.length > 0) {
+    await tx.groceryContribution.createMany({ data: contributionsToCreate });
+  }
+  for (const [itemId, delta] of existingDeltas) {
+    await tx.groceryItem.update({ where: { id: itemId }, data: { quantity: { increment: delta } } });
+  }
 
-    await tx.groceryItem.update({
-      where: { id: item.id },
-      data: { quantity: { increment: scaled } },
-    });
-
-    // S'assurer que le rayon existe (pour l'ordre d'affichage).
-    await tx.groceryAisle
-      .upsert({
-        where: { name: ing.aisle },
-        update: {},
-        create: { name: ing.aisle, label: ing.aisle, sortOrder: 999 },
-      })
-      .catch(() => undefined);
+  // 4) Ensure les rayons (batch : on ne crée que les manquants).
+  if (aislesToEnsure.size > 0) {
+    const names = [...aislesToEnsure];
+    const existing = await tx.groceryAisle.findMany({ where: { name: { in: names } }, select: { name: true } });
+    const have = new Set(existing.map((a) => a.name));
+    const missing = names.filter((n) => !have.has(n));
+    if (missing.length > 0) {
+      await tx.groceryAisle
+        .createMany({ data: missing.map((n) => ({ name: n, label: n, sortOrder: 999 })) })
+        .catch(() => undefined);
+    }
   }
 }
 
-/** Retire toutes les contributions d'un plan et nettoie les items orphelins. */
+/** Retire toutes les contributions d'un plan et nettoie les items orphelins (version batch). */
 async function removeContributions(tx: Tx, mealPlanId: string): Promise<void> {
-  const contributions = await tx.groceryContribution.findMany({
-    where: { mealPlanId },
-  });
+  const contributions = await tx.groceryContribution.findMany({ where: { mealPlanId } });
+  if (contributions.length === 0) return;
 
+  // Delta (négatif) par item.
+  const deltas = new Map<string, number>();
   for (const c of contributions) {
-    await tx.groceryItem.update({
-      where: { id: c.groceryItemId },
-      data: { quantity: { decrement: c.quantity } },
-    });
+    deltas.set(c.groceryItemId, (deltas.get(c.groceryItemId) ?? 0) - c.quantity);
   }
 
-  // Supprimer les contributions.
+  // Supprime les contributions de ce plan.
   await tx.groceryContribution.deleteMany({ where: { mealPlanId } });
 
-  // Nettoyer les items orphelins (sans contributions, non manuels).
-  const itemIds = [...new Set(contributions.map((c) => c.groceryItemId))];
-  for (const itemId of itemIds) {
-    const remaining = await tx.groceryContribution.count({ where: { groceryItemId: itemId } });
-    const item = await tx.groceryItem.findUnique({ where: { id: itemId } });
-    if (!item) continue;
-    if (remaining === 0 && !item.isManual) {
-      await tx.groceryItem.delete({ where: { id: itemId } });
+  const itemIds = [...deltas.keys()];
+
+  // Charge les items concernés + les contributions restantes (pour détecter les orphelins).
+  const [items, remaining] = await Promise.all([
+    tx.groceryItem.findMany({ where: { id: { in: itemIds } } }),
+    tx.groceryContribution.findMany({
+      where: { groceryItemId: { in: itemIds } },
+      select: { groceryItemId: true },
+    }),
+  ]);
+
+  const remainingCount = new Map<string, number>();
+  for (const r of remaining) remainingCount.set(r.groceryItemId, (remainingCount.get(r.groceryItemId) ?? 0) + 1);
+
+  const toDelete: string[] = [];
+  for (const item of items) {
+    const count = remainingCount.get(item.id) ?? 0;
+    // Orphelin (plus aucune contribution) ET non manuel → suppression.
+    if (count === 0 && !item.isManual) {
+      toDelete.push(item.id);
+    } else {
+      await tx.groceryItem.update({
+        where: { id: item.id },
+        data: { quantity: { increment: deltas.get(item.id) ?? 0 } },
+      });
     }
+  }
+
+  if (toDelete.length > 0) {
+    await tx.groceryItem.deleteMany({ where: { id: { in: toDelete } } });
   }
 }
 
@@ -196,7 +232,11 @@ export async function deleteMealPlan(tx: Tx, planId: string): Promise<void> {
   await tx.mealPlan.delete({ where: { id: planId } });
 }
 
-/** Wrapper utilitaire pour exécuter une logique dans une transaction. */
+/**
+ * Wrapper utilitaire : exécute une logique dans une transaction.
+ * Timeout allongé (30 s) pour absorber la latence Render → Supabase,
+ * sinon les transactions interactives sont coupées (P2028).
+ */
 export function run<T>(prisma: PrismaClient, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return prisma.$transaction(fn);
+  return prisma.$transaction(fn, { maxWait: 10000, timeout: 30000 });
 }
