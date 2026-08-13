@@ -17,7 +17,7 @@ interface GroceryItemModalProps {
 export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemModalProps) {
   const isEdit = Boolean(item);
   const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState('1');
   const [unit, setUnit] = useState('g');
   const [aisle, setAisle] = useState('epicerie_seche');
   const [notes, setNotes] = useState('');
@@ -30,7 +30,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
   useEffect(() => {
     if (open) {
       setName(item?.name ?? '');
-      setQuantity(item?.quantity ?? 1);
+      setQuantity(String(item?.quantity ?? 1));
       setUnit(item?.unit ?? 'g');
       setAisle(item?.aisle ?? 'epicerie_seche');
       setNotes(item?.notes ?? '');
@@ -52,15 +52,24 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
       setError('Le nom est obligatoire.');
       return;
     }
+    if (quantity.trim() === '') {
+      setError('La quantité est obligatoire.');
+      return;
+    }
+    const qty = Number(quantity);
+    if (Number.isNaN(qty)) {
+      setError('La quantité doit être un nombre.');
+      return;
+    }
     const finalAisle = customAisle.trim() || aisle;
     try {
       if (isEdit && item) {
         await update.mutateAsync({
           id: item.id,
-          input: { name, quantity: Number(quantity), unit, aisle: finalAisle, notes },
+          input: { name, quantity: qty, unit, aisle: finalAisle, notes },
         });
       } else {
-        await create.mutateAsync({ name, quantity: Number(quantity), unit, aisle: finalAisle, notes });
+        await create.mutateAsync({ name, quantity: qty, unit, aisle: finalAisle, notes });
       }
       onClose();
     } catch (err: any) {
@@ -101,8 +110,10 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
           <Field label="Quantité">
             <Input
               type="number"
+              inputMode="decimal"
               value={quantity}
-              onChange={(e) => setQuantity(Number(e.target.value))}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="ex : 200"
             />
           </Field>
           <Field label="Unité">
