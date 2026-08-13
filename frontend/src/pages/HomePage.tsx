@@ -31,7 +31,7 @@ export function HomePage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <Header title="Accueil" subtitle="Bashkush" />
+      <Header logo="/logo-inline.png" />
 
       <main className="flex-1 space-y-6 p-4">
         {/* Carrousel des plats */}

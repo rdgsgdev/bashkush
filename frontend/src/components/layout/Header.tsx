@@ -3,15 +3,18 @@ import { ReactNode } from 'react';
 import { useUiStore } from '../../store/uiStore';
 
 interface HeaderProps {
-  title: string;
+  /** Titre texte (ignoré si `logo` est fourni). */
+  title?: string;
   subtitle?: string;
+  /** Si fourni, remplace le titre/sous-titre par ce logo inline. */
+  logo?: string;
   /** Actions à droite (bouton ajouter, etc.). */
   action?: ReactNode;
   /** Masquer le bouton burger (par défaut visible). */
   showBurger?: boolean;
 }
 
-export function Header({ title, subtitle, action, showBurger = true }: HeaderProps) {
+export function Header({ title, subtitle, logo, action, showBurger = true }: HeaderProps) {
   const openBurger = useUiStore((s) => s.openBurger);
 
   return (
@@ -26,8 +29,14 @@ export function Header({ title, subtitle, action, showBurger = true }: HeaderPro
         </button>
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-lg font-bold leading-tight text-stone-800">{title}</h1>
-        {subtitle && <p className="truncate text-xs text-stone-500">{subtitle}</p>}
+        {logo ? (
+          <img src={logo} alt="Bashkush" className="h-8 w-auto" />
+        ) : (
+          <>
+            <h1 className="truncate text-lg font-bold leading-tight text-stone-800">{title}</h1>
+            {subtitle && <p className="truncate text-xs text-stone-500">{subtitle}</p>}
+          </>
+        )}
       </div>
       {action}
     </header>
