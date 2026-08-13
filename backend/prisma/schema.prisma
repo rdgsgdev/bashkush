@@ -1,0 +1,141 @@
+// ─────────────────────────────────────────────────────────────
+// Bashkush — Schéma Prisma (PostgreSQL / Supabase)
+// ─────────────────────────────────────────────────────────────
+// Source de vérité du modèle de données.
+// Appliquer les changements :  npx prisma db push
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // connexion poolée (exécution)
+  directUrl = env("DIRECT_URL")     // connexion directe (db push / migrations)
+}
+
+// ── Plats ────────────────────────────────────────────────────
+
+model Meal {
+  id          String   @id // slug issu du JSON ou UUID pour création manuelle
+  name        String
+  description String?
+  servings    Int      @default(2) // portions de référence des quantités d'ingrédients
+  prepTime    Int?     @map("prep_time")
+  cookTime    Int?     @map("cook_time")
+  totalTime   Int?     @map("total_time")
+  difficulty  String? // facile | moyen | difficile
+  category    String? // midi | soir | collation | autre
+  nutrition   Json? // { calories, protein, carbs, fat, fiber }
+  notes       String?
+  isFavorite  Boolean  @default(false) @map("is_favorite")
+  imageUrl    String?  @map("image_url")
+  imagePath   String?  @map("image_path") // chemin dans le bucket Storage
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  ingredients Ingredient[]
+  steps       Step[]
+  mealPlans   MealPlan[]
+
+  @@map("meals")
+}
+
+model Ingredient {
+  id       String // id de l'ingrédient (portée par repas)
+  mealId   String @map("meal_id")
+  name     String
+  quantity Float
+  unit     String
+  aisle    String // clé de rayon (ex: fruits_legumes) ou rayon personnalisé
+  optional Boolean @default(false)
+  notes    String?
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@id([mealId, id])
+  @@index([aisle])
+  @@map("ingredients")
+}
+
+model Step {
+  mealId      String   @map("meal_id")
+  stepNumber  Int      @map("step_number")
+  instruction String
+  time        Int?
+  ingredients Json? // tableau d'ids d'ingrédients utilisés
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@id([mealId, stepNumber])
+  @@map("steps")
+}
+
+// ── Planification ────────────────────────────────────────────
+
+model MealPlan {
+  id       String   @id @default(uuid())
+  mealId   String   @map("meal_id")
+  fromDate DateTime @map("from_date")
+  toDate   DateTime @map("to_date")
+  servings Int      @default(2) // 1..10
+  status   String   @default("a_faire") // a_faire | en_preparation | prepare
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  meal          Meal                 @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  contributions GroceryContribution[]
+
+  @@index([fromDate, toDate])
+  @@map("meal_plans")
+}
+
+// ── Liste de courses ─────────────────────────────────────────
+
+model GroceryItem {
+  id        String   @id @default(uuid())
+  name      String
+  quantity  Float // quantité totale affichée (authoritaire)
+  unit      String
+  aisle     String
+  isManual  Boolean  @default(false) @map("is_manual") // créé à la main → jamais auto-supprimé
+  checked   Boolean  @default(false) // acheté / déjà possédé
+  archived  Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contributions GroceryContribution[]
+
+  @@index([aisle])
+  @@index([archived])
+  @@map("grocery_items")
+}
+
+// Lien entre un item de liste et le plan qui l'a généré.
+// Permet de recalculer les quantités quand un plan change/supprimé.
+model GroceryContribution {
+  id            String @id @default(uuid())
+  groceryItemId String @map("grocery_item_id")
+  mealPlanId    String @map("meal_plan_id")
+  ingredientId  String @map("ingredient_id")
+  quantity      Float // quantité apportée par ce plan (déjà mise à l'échelle)
+
+  groceryItem GroceryItem @relation(fields: [groceryItemId], references: [id], onDelete: Cascade)
+  mealPlan    MealPlan    @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([mealPlanId, ingredientId])
+  @@index([groceryItemId])
+  @@map("grocery_contributions")
+}
+
+// Ordre d'affichage des rayons (+ rayons personnalisés).
+model GroceryAisle {
+  name      String  @id // clé (ex: fruits_legumes)
+  label     String? // libellé affiché (ex: "Fruits & légumes")
+  sortOrder Int     @default(0) @map("sort_order")
+  isDefault Boolean @default(false) @map("is_default")
+
+  @@map("grocery_aisles")
+}

@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────
+# Render Blueprint — Bashkush (backend + frontend)
+# ─────────────────────────────────────────────────────────────
+# Déploiement via :  render blueprint deploy
+# (ou Settings → Blueprint dans le dashboard Render, en pointant
+# vers ce dépôt). Les variables d'environnement chiffrées
+# (SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL, DIRECT_URL) sont à
+# définir manuellement comme Secret Files / Env Vars après la
+# première création du service.
+# ─────────────────────────────────────────────────────────────
+services:
+  - type: web
+    name: bashkush-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: meals-images
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+  - type: web
+    name: bashkush-web
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      # Redirection SPA : toute route inconnue sert index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false

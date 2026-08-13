@@ -1,0 +1,141 @@
+// ── Types partagés (miroir des modèles Prisma du backend) ────
+
+export type Difficulty = 'facile' | 'moyen' | 'difficile';
+export type Category = 'midi' | 'soir' | 'collation' | 'autre';
+export type MealPlanStatus = 'a_faire' | 'en_preparation' | 'prepare';
+
+export interface Nutrition {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+}
+
+export interface Ingredient {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  aisle: string;
+  optional?: boolean;
+  notes?: string | null;
+}
+
+export interface Step {
+  stepNumber: number;
+  instruction: string;
+  time?: number | null;
+  ingredients?: string[] | null;
+}
+
+export interface Meal {
+  id: string;
+  name: string;
+  description?: string | null;
+  servings: number;
+  prepTime?: number | null;
+  cookTime?: number | null;
+  totalTime?: number | null;
+  difficulty?: Difficulty | null;
+  category?: Category | null;
+  nutrition?: Nutrition | null;
+  notes?: string | null;
+  isFavorite: boolean;
+  imageUrl?: string | null;
+  imagePath?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  ingredients: Ingredient[];
+  steps: Step[];
+}
+
+/** Format attendu par l'import JSON (champs optionnels). */
+export interface MealDraft {
+  id?: string;
+  name: string;
+  description?: string | null;
+  servings?: number;
+  prepTime?: number | null;
+  cookTime?: number | null;
+  totalTime?: number | null;
+  difficulty?: Difficulty | null;
+  category?: Category | null;
+  nutrition?: Nutrition | null;
+  notes?: string | null;
+  ingredients: Ingredient[];
+  steps?: Step[];
+}
+
+export interface MealPlan {
+  id: string;
+  mealId: string;
+  fromDate: string;
+  toDate: string;
+  servings: number;
+  status: MealPlanStatus;
+  createdAt: string;
+  updatedAt: string;
+  meal: Meal;
+}
+
+export interface GroceryItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  aisle: string;
+  isManual: boolean;
+  checked: boolean;
+  archived: boolean;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroceryAisle {
+  name: string;
+  label?: string | null;
+  sortOrder: number;
+  isDefault: boolean;
+}
+
+export interface GroceryListResponse {
+  items: GroceryItem[];
+  aisles: GroceryAisle[];
+}
+
+// ── Libellés FR pour les enums ──────────────────────────────
+
+export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+  facile: 'Facile',
+  moyen: 'Moyen',
+  difficile: 'Difficile',
+};
+
+export const CATEGORY_LABELS: Record<Category, string> = {
+  midi: 'Midi',
+  soir: 'Soir',
+  collation: 'Collation',
+  autre: 'Autre',
+};
+
+export const STATUS_LABELS: Record<MealPlanStatus, string> = {
+  a_faire: 'À faire',
+  en_preparation: 'En préparation',
+  prepare: 'Préparé',
+};
+
+export const AISLE_LABELS: Record<string, string> = {
+  fruits_legumes: 'Fruits & légumes',
+  proteines: 'Protéines',
+  feculents: 'Féculents',
+  cremerie: 'Crèmerie',
+  epicerie_seche: 'Épicerie sèche',
+  conserves: 'Conserves',
+  surgelas: 'Surgelés',
+  boissons: 'Boissons',
+  epices_condiments: 'Épices & condiments',
+};
+
+export const AISLE_OPTIONS = Object.keys(AISLE_LABELS);
