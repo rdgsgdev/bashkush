@@ -38,7 +38,8 @@ services:
   - type: web
     name: bashkush-web
     runtime: static
-    plan: free
+    # Pas de `plan` pour les sites statiques : ils sont gratuits par défaut,
+    # et `plan: free` provoque l'erreur "no such plan free for service type web".
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
