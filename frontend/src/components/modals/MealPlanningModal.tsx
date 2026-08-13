@@ -128,11 +128,11 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
           <MealCarousel selectedId={mealId} onSelect={(m) => setMealId(m.id)} />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Du">
             <input
               type="date"
-              className="field"
+              className="field min-w-0"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
             />
@@ -140,7 +140,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
           <Field label="Au">
             <input
               type="date"
-              className="field"
+              className="field min-w-0"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
             />
