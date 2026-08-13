@@ -165,13 +165,13 @@ async function removeContributions(tx: Tx, mealPlanId: string): Promise<void> {
   const itemIds = [...deltas.keys()];
 
   // Charge les items concernés + les contributions restantes (pour détecter les orphelins).
-  const [items, remaining] = await Promise.all([
-    tx.groceryItem.findMany({ where: { id: { in: itemIds } } }),
-    tx.groceryContribution.findMany({
-      where: { groceryItemId: { in: itemIds } },
-      select: { groceryItemId: true },
-    }),
-  ]);
+  // ⚠️ Séquentiel : une transaction Prisma interactive n'accepte pas les requêtes
+  // concurrentes (Promise.all sur `tx` => blocage de la transaction).
+  const items = await tx.groceryItem.findMany({ where: { id: { in: itemIds } } });
+  const remaining = await tx.groceryContribution.findMany({
+    where: { groceryItemId: { in: itemIds } },
+    select: { groceryItemId: true },
+  });
 
   const remainingCount = new Map<string, number>();
   for (const r of remaining) remainingCount.set(r.groceryItemId, (remainingCount.get(r.groceryItemId) ?? 0) + 1);

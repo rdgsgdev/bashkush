@@ -36,5 +36,15 @@ async function shutdown(signal: string) {
   process.exit(0);
 }
 
+// Visibilité des erreurs non interceptées (sinon silencieuses en prod).
+process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
+  console.error('‼️ Unhandled rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  // eslint-disable-next-line no-console
+  console.error('‼️ Uncaught exception:', err);
+});
+
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
