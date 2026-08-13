@@ -22,7 +22,22 @@ export function scaleQuantity(qty: number, planServings: number, mealServings: n
   return Math.round((qty * (planServings / base)) * 1000) / 1000;
 }
 
-const itemKey = (name: string, unit: string, aisle: string) => `${name}\u0000${unit}\u0000${aisle}`;
+/**
+ * Normalisation (minuscules, sans accents, espaces collapsés) servant de clé de
+ * fusion : deux ingrédients ne différant que par la casse/les accents/les espaces
+ * (ex: « Courgettes », « courgette », «  courgettes ») sont fusionnés en un seul
+ * item de liste de courses. Le nom affiché reste celui de la première insertion.
+ */
+const normalize = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // retire les accents
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+const itemKey = (name: string, unit: string, aisle: string) =>
+  `${normalize(name)}\u0000${normalize(unit)}\u0000${normalize(aisle)}`;
 
 /** Crée le plan + ajoute les contributions de ses ingrédients (transaction). */
 export async function planMeal(
