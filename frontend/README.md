@@ -29,6 +29,11 @@ cp .env.example .env
 | Variable | Description | Exemple |
 |---|---|---|
 | `VITE_API_URL` | URL de l'API backend (sans `/api`) | `http://localhost:4000` |
+| `VITE_SUPABASE_URL` | Project URL Supabase (auth Apple / Google) | `https://xxxx.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Clé anon (publique) du projet Supabase | `eyJhbGci...` |
+
+Les clés Supabase se trouvent dans le dashboard : **Settings → API**.
+Voir le README racine pour activer les providers **Apple / Google** (Authentication → Providers).
 
 En production, cette valeur sera l'URL publique du web service Render
 (ex : `https://bashkush-api.onrender.com`).
@@ -70,9 +75,9 @@ src/
 │   ├── grocery/      GroceryItemRow, GroceryItemModal
 │   ├── modals/       Modal (bottom-sheet), MealEditionModal, MealPlanningModal
 │   └── ui/           Button, Feedback, FormControl, NumberStepper
-├── lib/              utils (dates, formatage), options (enums), plans (helpers)
-├── pages/            HomePage, MealsPage, CalendarPage, GroceryListPage
-├── store/            uiStore (Zustand : menu burger)
+├── lib/              utils (dates, formatage), options (enums), plans (helpers), client Supabase (auth)
+├── pages/            LoginPage, HomePage, MealsPage, CalendarPage, GroceryListPage
+├── store/            uiStore (menu burger), authStore (session Supabase)
 ├── types/            Types partagés + libellés FR
 ├── router.tsx        Routes React Router
 ├── App.tsx           Providers (QueryClient + Router + AppShell)
@@ -101,6 +106,8 @@ Après création du Blueprint, renseignez `VITE_API_URL` (URL publique de l'API)
    - **Plan** : Free
 3. **Environment variables** :
    - `VITE_API_URL` = URL publique du backend (ex : `https://bashkush-api.onrender.com`)
+   - `VITE_SUPABASE_URL` = Project URL Supabase
+   - `VITE_SUPABASE_ANON_KEY` = clé anon Supabase
 4. **Create Static Site**.
 5. **Routing SPA** : ajoutez une **redirect/rewrite** pour que toute route serve `index.html` :
    - **Redirects/Rewrites** → `/*` → `/index.html` (Action : Rewrite).
@@ -122,3 +129,4 @@ Après création du Blueprint, renseignez `VITE_API_URL` (URL publique de l'API)
 | 404 au refresh sur `/meals` ou `/calendar` | La règle de **rewrite SPA** (`/* → /index.html`) est manquante côté Render. |
 | Modale ne s'ouvre pas | Les modales s'ouvrent via query param (`?meal=`, `?plan=`) ; vérifiez l'URL. |
 | Les images ne s'affichent pas | Le bucket Supabase `meals-images` doit être **public**. |
+| Erreur au clic sur « Continuer avec Apple / Google » | Provider non activé dans Supabase (Authentication → Providers) ou URL de redirection manquante (Authentication → URL Configuration). |

@@ -128,6 +128,11 @@ npm run dev
 
 Préfixe : `/api`. Toutes les réponses en JSON.
 
+> 🔐 **Authentification** — toutes les routes (sauf `GET /api/health`) exigent un en-tête `Authorization: Bearer <token>` contenant un jeton de session Supabase valide (connexion Apple / Google côté frontend). Le middleware `src/middleware/auth.ts` vérifie le jeton auprès de Supabase et renvoie `401` sinon. Exemple :
+> ```bash
+> curl -H "Authorization: Bearer $TOKEN" http://localhost:4000/api/meals
+> ```
+
 ### Repas (`/api/meals`)
 | Méthode | Route | Description |
 |---|---|---|
