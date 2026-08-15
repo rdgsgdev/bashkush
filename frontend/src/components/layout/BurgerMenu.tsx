@@ -1,8 +1,9 @@
-import { Home, UtensilsCrossed, CalendarDays, ShoppingCart } from 'lucide-react';
+import { Home, UtensilsCrossed, CalendarDays, ShoppingCart, User, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useEffect } from 'react';
 import { useUiStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import { cn } from '../../lib/utils';
 
 const NAV = [
@@ -15,6 +16,7 @@ const NAV = [
 export function BurgerMenu() {
   const open = useUiStore((s) => s.burgerOpen);
   const close = useUiStore((s) => s.closeBurger);
+  const signOut = useAuthStore((s) => s.signOut);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -58,9 +60,32 @@ export function BurgerMenu() {
             );
           })}
         </ul>
-        <p className="border-t border-stone-100 px-5 py-4 text-xs text-stone-400">
-          Bashkush · v1.0
-        </p>
+        <div className="border-t border-stone-100 px-3 py-3">
+          <button
+            onClick={() => go('/profil')}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
+              location.pathname === '/profil'
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-stone-600 hover:bg-stone-100',
+            )}
+          >
+            <User className="h-5 w-5" />
+            Mon profil
+          </button>
+          <button
+            onClick={async () => {
+              close();
+              await signOut();
+              navigate('/login');
+            }}
+            className="mt-1 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-100"
+          >
+            <LogOut className="h-5 w-5" />
+            Déconnexion
+          </button>
+          <p className="px-2 pt-2 text-xs text-stone-400">Bashkush · v1.0</p>
+        </div>
       </nav>
     </div>,
     document.body,

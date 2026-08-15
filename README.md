@@ -5,8 +5,32 @@ Application web **mobile-first** de **création et planification de plats** avec
 - 🍽️ Créez vos plats (manuellement ou par **import JSON**), avec photo, ingrédients, étapes et infos nutritionnelles.
 - 📅 **Planifiez** vos repas sur un calendrier (plages de dates, portions, statut).
 - 🛒 La **liste de courses** se génère automatiquement à partir du planning, **regroupée par rayons**, agrégée et éditable.
+- 👤 **Onboarding** à la première connexion (objectifs, activité, santé, alimentation…) puis **page profil** modifiable avec photo.
 
-> 100 % en français · mono-utilisateur · pensé mobile d'abord.
+> 100 % en français · connexion **Google** · pensé mobile d'abord.
+
+---
+
+## 🔐 Authentification (Google)
+
+L'application exige une connexion via **Supabase Auth** avec le provider **Google** (pas de création de compte courriel/mot de passe).
+
+> ℹ️ Le provider Apple pourrait être ajouté plus tard, mais il nécessite un compte Apple Developer payant (99 $/an).
+
+### 1. Activer le provider dans Supabase
+- **Google** : dashboard Supabase → **Authentication → Providers → Google** → activer, puis renseigner le *Client ID* et le *Client Secret* d'une application OAuth Google (console Google Cloud → Credentials → OAuth Client ID, type *Web application* ; URI de redirection autorisée : `https://VOTRE-PROJET.supabase.co/auth/v1/callback`).
+
+### 2. URLs de redirection
+Dans **Authentication → URL Configuration**, ajoutez l'URL du site dans *Redirect URLs* :
+- local : `http://localhost:5173`
+- prod : l'URL Render du frontend (ex : `https://bashkush.onrender.com`)
+
+### 3. Variables d'environnement frontend
+Renseignez `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (voir `frontend/.env.example`).
+
+Côté backend, chaque requête `/api/*` (sauf `/health`) doit porter un jeton `Authorization: Bearer <token>` valide — le middleware `backend/src/middleware/auth.ts` vérifie la session auprès de Supabase et renvoie `401` sinon.
+
+> ℹ️ Les données (plats, calendrier, listes) restent **partagées** entre tous les utilisateurs connectés — l'authentification protège l'accès à l'application.
 
 ---
 
@@ -51,7 +75,7 @@ Vous avez besoin de **Node.js ≥ 20** et d'un compte **Supabase** (gratuit).
 3. **Frontend**
    ```bash
    cd frontend
-   cp .env.example .env          # VITE_API_URL=http://localhost:4000
+   cp .env.example .env          # VITE_API_URL + clés Supabase (auth)
    npm install
    npm run dev                   # http://localhost:5173
    ```

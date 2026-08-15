@@ -128,6 +128,11 @@ npm run dev
 
 Préfixe : `/api`. Toutes les réponses en JSON.
 
+> 🔐 **Authentification** — toutes les routes (sauf `GET /api/health`) exigent un en-tête `Authorization: Bearer <token>` contenant un jeton de session Supabase valide (connexion Google côté frontend). Le middleware `src/middleware/auth.ts` vérifie le jeton auprès de Supabase et renvoie `401` sinon. Exemple :
+> ```bash
+> curl -H "Authorization: Bearer $TOKEN" http://localhost:4000/api/meals
+> ```
+
 ### Repas (`/api/meals`)
 | Méthode | Route | Description |
 |---|---|---|
@@ -160,6 +165,13 @@ Préfixe : `/api`. Toutes les réponses en JSON.
 | POST | `/grocery-items/archive` | `{mode:"checked"\|"all", ids?}` |
 | POST | `/grocery-items/unarchive` | `{ids?}` |
 | GET/POST/PUT/DELETE | `/grocery-aisles` | Gestion des rayons |
+
+### Profil (`/api/profile`)
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/profile` | Profil de l'utilisateur connecté (`{ onboarded: false }` s'il n'existe pas) |
+| PUT | `/profile` | Crée/met à jour le profil (1er enregistrement = fin d'onboarding) |
+| POST | `/profile/image` | Photo de profil (multipart `image`) → Storage |
 
 ---
 

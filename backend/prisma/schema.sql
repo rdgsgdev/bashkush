@@ -1,4 +1,38 @@
 -- CreateTable
+CREATE TABLE "profiles" (
+    "user_id" TEXT NOT NULL,
+    "full_name" TEXT,
+    "birth_date" TIMESTAMP(3),
+    "sex" TEXT,
+    "height_cm" DOUBLE PRECISION,
+    "weight_kg" DOUBLE PRECISION,
+    "activity_level" TEXT,
+    "weekly_activity" TEXT,
+    "fitness_level" TEXT,
+    "goals" TEXT[],
+    "goal_other" TEXT,
+    "medical_conditions" TEXT[],
+    "allergies" TEXT,
+    "medications" TEXT,
+    "medical_other" TEXT,
+    "meal_frequency" TEXT,
+    "meal_frequency_other" TEXT,
+    "food_choices" TEXT[],
+    "food_other" TEXT,
+    "notes" TEXT,
+    "photo_url" TEXT,
+    "image_path" TEXT,
+    "daily_calories" INTEGER,
+    "daily_protein" INTEGER,
+    "targets_manual" BOOLEAN NOT NULL DEFAULT false,
+    "onboarded_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "profiles_pkey" PRIMARY KEY ("user_id")
+);
+
+-- CreateTable
 CREATE TABLE "meals" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -97,6 +131,19 @@ CREATE TABLE "grocery_aisles" (
     CONSTRAINT "grocery_aisles_pkey" PRIMARY KEY ("name")
 );
 
+-- CreateTable
+CREATE TABLE "family_members" (
+    "id" TEXT NOT NULL,
+    "owner_user_id" TEXT NOT NULL,
+    "member_email" TEXT NOT NULL,
+    "member_user_id" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "family_members_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "ingredients_aisle_idx" ON "ingredients"("aisle");
 
@@ -115,6 +162,12 @@ CREATE INDEX "grocery_contributions_grocery_item_id_idx" ON "grocery_contributio
 -- CreateIndex
 CREATE UNIQUE INDEX "grocery_contributions_meal_plan_id_ingredient_id_key" ON "grocery_contributions"("meal_plan_id", "ingredient_id");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "family_members_owner_user_id_member_email_key" ON "family_members"("owner_user_id", "member_email");
+
+-- CreateIndex
+CREATE INDEX "family_members_member_email_idx" ON "family_members"("member_email");
+
 -- AddForeignKey
 ALTER TABLE "ingredients" ADD CONSTRAINT "ingredients_meal_id_fkey" FOREIGN KEY ("meal_id") REFERENCES "meals"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -129,4 +182,10 @@ ALTER TABLE "grocery_contributions" ADD CONSTRAINT "grocery_contributions_grocer
 
 -- AddForeignKey
 ALTER TABLE "grocery_contributions" ADD CONSTRAINT "grocery_contributions_meal_plan_id_fkey" FOREIGN KEY ("meal_plan_id") REFERENCES "meal_plans"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "family_members" ADD CONSTRAINT "family_members_owner_user_id_fkey" FOREIGN KEY ("owner_user_id") REFERENCES "profiles"("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "family_members" ADD CONSTRAINT "family_members_member_user_id_fkey" FOREIGN KEY ("member_user_id") REFERENCES "profiles"("user_id") ON DELETE SET NULL ON UPDATE CASCADE;
 
