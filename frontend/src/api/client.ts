@@ -25,3 +25,12 @@ if (!import.meta.env.VITE_API_URL && import.meta.env.DEV) {
     '⚠️ VITE_API_URL non défini — utilisation de http://localhost:4000. Copiez .env.example en .env si besoin.',
   );
 }
+
+/** Extrait un message d'erreur lisible d'une réponse API échouée. */
+export function getApiErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as { error?: string } | undefined;
+    return data?.error ?? err.message;
+  }
+  return err instanceof Error ? err.message : 'Une erreur est survenue';
+}

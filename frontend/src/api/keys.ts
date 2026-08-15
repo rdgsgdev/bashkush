@@ -9,4 +9,6 @@ export const queryKeys = {
   profile: ['profile'] as const,
   family: ['family'] as const,
   familyInvitations: ['family', 'invitations'] as const,
+  familyMembers: ['family', 'members'] as const,
+  aiMeal: ['ai', 'meal'] as const,
 };

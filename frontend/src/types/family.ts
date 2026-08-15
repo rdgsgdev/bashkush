@@ -20,3 +20,19 @@ export interface FamilyInvitationView {
   inviterEmail: string | null;
   inviterName: string | null;
 }
+
+// ── Profils de la famille (GET /family/members) ──────────────
+// Utilisé par la modale de génération IA pour sélectionner les
+// membres dont on récupère les données nutritionnelles.
+
+export interface FamilyMemberProfileView {
+  userId: string;
+  fullName: string | null;
+  photoUrl: string | null;
+  isSelf: boolean;
+  dailyCalories: number | null;
+  dailyProtein: number | null;
+  goals: string[];
+  allergies: string | null;
+  foodChoices: string[];
+}
