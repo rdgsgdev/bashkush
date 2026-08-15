@@ -23,6 +23,11 @@ export async function ensureFamilyId(userId: string, email?: string | null): Pro
   if (profile?.familyId) return profile.familyId;
 
   return prisma.$transaction(async (tx) => {
+    // Verrou advisory par utilisateur : les appels parallèles du dashboard
+    // (meals, plans, grocery…) voient tous family_id null en même temps et
+    // créeraient chacun une famille solo sans ce verrou.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+
     const current = await tx.profile.findUnique({
       where: { userId },
       select: { familyId: true },

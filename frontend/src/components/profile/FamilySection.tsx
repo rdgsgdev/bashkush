@@ -25,15 +25,27 @@ function MemberRow({
   const initial = (member.fullName || member.email || '?').charAt(0).toUpperCase();
   return (
     <li className="flex items-center gap-3 rounded-xl bg-stone-100 px-3 py-2.5">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
-        {initial}
-      </div>
+      {member.photoUrl ? (
+        <img
+          src={member.photoUrl}
+          alt={member.fullName || member.email || ''}
+          className="h-9 w-9 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
+          {initial}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-stone-800">
           {member.fullName || member.email}
         </p>
         <p className="truncate text-xs text-stone-400">
-          {member.fullName ? member.email : member.direction === 'invited_by' ? 't’a invité' : ''}
+          {member.fullName && member.email
+            ? member.email
+            : member.direction === 'invited_by'
+              ? 't’a invité'
+              : ''}
         </p>
       </div>
       {member.status === 'pending' ? (
@@ -49,7 +61,7 @@ function MemberRow({
         type="button"
         onClick={() => onRemove(member.id)}
         disabled={removing}
-        aria-label={`Retirer ${member.fullName || member.email}`}
+        aria-label={`Retirer ${member.fullName || member.email || 'ce membre'}`}
         className="shrink-0 rounded-lg p-1.5 text-stone-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
       >
         <X className="h-4 w-4" />

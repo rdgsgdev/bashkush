@@ -8,9 +8,11 @@ import { addFamilyMemberSchema } from '../schemas/family.schema';
 
 /** Vue renvoyée au frontend pour un membre de la famille. */
 export interface FamilyMemberView {
+  /** id de la ligne family_members, ou userId du profil si aucune ligne n'existe. */
   id: string;
-  email: string;
+  email: string | null;
   fullName: string | null;
+  photoUrl: string | null;
   status: 'pending' | 'accepted';
   /** invited = c'est moi qui ai invité ; invited_by = c'est lui qui m'a invité. */
   direction: 'invited' | 'invited_by';
@@ -40,9 +42,12 @@ async function findSupabaseUserIdByEmail(email: string): Promise<string | null> 
 }
 
 /**
- * Liste les membres de ma famille (moi exclu). L'acceptation des invitations
- * « pending » pointant vers mon courriel se fait dans ensureFamilyId
- * (src/lib/family.ts) — commune à toutes les routes.
+ * Liste les membres de ma famille (moi exclu).
+ *
+ * Source de vérité : profiles.family_id. Les membres « accepted » sont donc
+ * lus depuis les profils (nom + photo), et non depuis family_members — dont
+ * les lignes peuvent manquer (courses concurrentes, échanges d'invitations).
+ * Les invitations « pending » restent lues depuis family_members.
  */
 export const getFamily = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const userId = req.authUser!.id;
@@ -51,20 +56,50 @@ export const getFamily = asyncHandler(async (req: AuthedRequest, res: Response) 
 
   const familyId = await ensureFamilyId(userId, myEmail);
 
-  // Tous les liens de ma famille, sauf ma propre ligne d'adhésion.
-  const links = await prisma.familyMember.findMany({
-    where: { familyId, memberUserId: { not: userId } },
-    include: { member: { select: { fullName: true } } },
-    orderBy: { createdAt: 'asc' },
-  });
+  const [profilesInFamily, links] = await Promise.all([
+    prisma.profile.findMany({
+      where: { familyId, userId: { not: userId } },
+      select: { userId: true, fullName: true, photoUrl: true },
+    }),
+    prisma.familyMember.findMany({ where: { familyId } }),
+  ]);
+  // Lien de chaque membre accepté (s'il existe) → id utilisable pour le retrait
+  // + direction de l'invitation.
+  const acceptedLinkByUserId = new Map(
+    links.filter((l) => l.status === 'accepted').map((l) => [l.memberUserId ?? '', l]),
+  );
+  // Membres déjà listés côté profils → on ne les répète pas côté pending.
+  const inFamilyUserIds = new Set(profilesInFamily.map((p) => p.userId));
 
-  const members: FamilyMemberView[] = links.map((l) => ({
-    id: l.id,
-    email: l.memberEmail,
-    fullName: l.member?.fullName ?? null,
-    status: l.status as 'pending' | 'accepted',
-    direction: l.invitedById === userId ? ('invited' as const) : ('invited_by' as const),
-  }));
+  const members: FamilyMemberView[] = [
+    ...profilesInFamily.map((p) => {
+      const link = acceptedLinkByUserId.get(p.userId);
+      return {
+        id: link?.id ?? p.userId,
+        email: link?.memberEmail ?? null,
+        fullName: p.fullName,
+        photoUrl: p.photoUrl,
+        status: 'accepted' as const,
+        direction:
+          link && link.invitedById !== userId ? ('invited_by' as const) : ('invited' as const),
+      };
+    }),
+    ...links
+      .filter(
+        (l) =>
+          l.status === 'pending' &&
+          l.memberUserId !== userId &&
+          !(l.memberUserId && inFamilyUserIds.has(l.memberUserId)),
+      )
+      .map((l) => ({
+        id: l.id,
+        email: l.memberEmail,
+        fullName: null,
+        photoUrl: null,
+        status: 'pending' as const,
+        direction: l.invitedById === userId ? ('invited' as const) : ('invited_by' as const),
+      })),
+  ];
 
   res.json(members);
 });
@@ -136,14 +171,36 @@ export const removeFamilyMember = asyncHandler(async (req: AuthedRequest, res: R
   const userId = req.authUser!.id;
   const { id } = req.params;
 
-  const member = await prisma.familyMember.findUnique({ where: { id } });
-  if (!member) throw new HttpError(404, 'Membre introuvable');
-
-  const profile = await prisma.profile.findUnique({
+  const myProfile = await prisma.profile.findUnique({
     where: { userId },
     select: { familyId: true },
   });
-  const myFamilyId = profile?.familyId ?? null;
+  const myFamilyId = myProfile?.familyId ?? null;
+
+  let member = await prisma.familyMember.findUnique({ where: { id } });
+
+  // Fallback : l'id peut être un userId de profil (membre listé depuis
+  // profiles.family_id sans ligne family_members associée).
+  if (!member) {
+    const target = await prisma.profile.findUnique({
+      where: { userId: id },
+      select: { userId: true, familyId: true },
+    });
+    if (target?.familyId && target.familyId === myFamilyId && target.userId !== userId) {
+      await prisma.$transaction(async (tx) => {
+        await tx.familyMember.deleteMany({
+          where: { familyId: myFamilyId, memberUserId: target.userId },
+        });
+        await tx.profile.update({
+          where: { userId: target.userId },
+          data: { familyId: null },
+        });
+      });
+      res.status(204).send();
+      return;
+    }
+    throw new HttpError(404, 'Membre introuvable');
+  }
 
   // Le lien doit concerner ma famille, et seul l'inviteur ou l'invité peut le retirer.
   if (member.familyId !== myFamilyId) {
@@ -211,6 +268,10 @@ export const acceptFamilyInvitation = asyncHandler(async (req: AuthedRequest, re
   const { id } = req.params;
 
   const familyId = await prisma.$transaction(async (tx) => {
+    // Même verrou que ensureFamilyId : pas d'acceptation en parallèle d'une
+    // (auto-)acceptation concurrente.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+
     const invitation = await tx.familyMember.findUnique({ where: { id } });
     if (!invitation || invitation.memberEmail !== myEmail || invitation.status !== 'pending') {
       throw new HttpError(404, 'Invitation introuvable');

@@ -31,7 +31,13 @@ export async function declineFamilyInvitation(id: string): Promise<void> {
 }
 
 export function useFamily() {
-  return useQuery({ queryKey: queryKeys.family, queryFn: getFamily, staleTime: 60_000 });
+  return useQuery({
+    queryKey: queryKeys.family,
+    queryFn: getFamily,
+    staleTime: 60_000,
+    // Refetch au focus : le statut des invitations peut changer côté invité.
+    refetchOnWindowFocus: true,
+  });
 }
 
 export function useAddFamilyMember() {
@@ -55,6 +61,7 @@ export function useFamilyInvitations() {
     queryKey: queryKeys.familyInvitations,
     queryFn: getFamilyInvitations,
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 }
 
