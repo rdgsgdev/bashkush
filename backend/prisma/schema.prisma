@@ -48,33 +48,58 @@ model Profile {
   dailyProtein  Int?   @map("daily_protein")  // g de protéines/jour
   targetsManual Boolean @default(false) @map("targets_manual") // true = saisis à la main (sync → recalcul)
   onboardedAt DateTime? @map("onboarded_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  ownedFamilyMembers FamilyMember[] @relation("FamilyOwner")
-  familyMemberships   FamilyMember[] @relation("FamilyMember")
+  // Famille de l'utilisateur (null → famille créée paresseusement à la
+  // première utilisation). Les plats, planifications et listes de courses
+  // sont scopés à cette famille.
+  familyId String? @map("family_id")
+  family   Family? @relation(fields: [familyId], references: [id])
+
+  familyInvitesSent  FamilyMember[] @relation("FamilyInviter")
+  familyMemberships  FamilyMember[] @relation("FamilyMember")
 
   @@map("profiles")
 }
 
 // ── Famille ──────────────────────────────────────────────────
-// Lien dirigé : ownerUserId invite memberEmail. Le lien devient
-// "accepted" dès que la personne dispose d'un compte (userId connu).
-// L'affichage est symétrique (chaque côté voit l'autre via /family).
+// Un groupe de famille : les plats, planifications et listes de
+// courses appartiennent à une famille et ne sont visibles que de
+// ses membres. Un utilisateur appartient à 0 ou 1 famille.
+
+model Family {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profiles     Profile[]
+  members      FamilyMember[]
+  meals        Meal[]
+  mealPlans    MealPlan[]
+  groceryItems GroceryItem[]
+
+  @@map("families")
+}
+
+// Invitation au sein d'une famille : invitedById invite memberEmail.
+// Le lien devient "accepted" dès que la personne dispose d'un compte
+// (userId connu). La famille d'un membre = profiles.family_id.
 
 model FamilyMember {
   id           String   @id @default(uuid())
-  ownerUserId  String   @map("owner_user_id") // celui qui invite
+  familyId     String   @map("family_id")
+  invitedById  String   @map("invited_by_id") // celui qui invite (affichage de la direction)
   memberEmail  String   @map("member_email") // courriel invité (minuscules)
   memberUserId String?  @map("member_user_id") // rempli quand la personne a un compte
   status       String   @default("pending") // pending | accepted
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  owner  Profile @relation("FamilyOwner", fields: [ownerUserId], references: [userId], onDelete: Cascade)
-  member Profile? @relation("FamilyMember", fields: [memberUserId], references: [userId], onDelete: SetNull)
+  family  Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  inviter Profile @relation("FamilyInviter", fields: [invitedById], references: [userId], onDelete: Cascade)
+  member  Profile? @relation("FamilyMember", fields: [memberUserId], references: [userId], onDelete: SetNull)
 
-  @@unique([ownerUserId, memberEmail])
+  @@unique([familyId, memberEmail])
   @@index([memberEmail])
   @@map("family_members")
 }
@@ -83,6 +108,7 @@ model FamilyMember {
 
 model Meal {
   id          String   @id // slug issu du JSON ou UUID pour création manuelle
+  familyId    String   @map("family_id") // visibilité : plats de la famille uniquement
   name        String
   description String?
   servings    Int      @default(2) // portions de référence des quantités d'ingrédients
@@ -99,10 +125,12 @@ model Meal {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  family      Family        @relation(fields: [familyId], references: [id])
   ingredients Ingredient[]
   steps       Step[]
   mealPlans   MealPlan[]
 
+  @@index([familyId])
   @@map("meals")
 }
 
@@ -140,6 +168,7 @@ model Step {
 
 model MealPlan {
   id       String   @id @default(uuid())
+  familyId String   @map("family_id") // visibilité : planifications de la famille uniquement
   mealId   String   @map("meal_id")
   fromDate DateTime @map("from_date")
   toDate   DateTime @map("to_date")
@@ -149,9 +178,10 @@ model MealPlan {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   meal          Meal                 @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  family        Family               @relation(fields: [familyId], references: [id])
   contributions GroceryContribution[]
 
-  @@index([fromDate, toDate])
+  @@index([familyId, fromDate, toDate])
   @@map("meal_plans")
 }
 
@@ -159,6 +189,7 @@ model MealPlan {
 
 model GroceryItem {
   id        String   @id @default(uuid())
+  familyId  String   @map("family_id") // visibilité : liste propre à chaque famille
   name      String
   quantity  Float // quantité totale affichée (authoritaire)
   unit      String
@@ -170,10 +201,11 @@ model GroceryItem {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  family        Family               @relation(fields: [familyId], references: [id])
   contributions GroceryContribution[]
 
-  @@index([aisle])
-  @@index([archived])
+  @@index([familyId, aisle])
+  @@index([familyId, archived])
   @@map("grocery_items")
 }
 

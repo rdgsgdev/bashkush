@@ -3,6 +3,7 @@ import { prisma } from '../prisma';
 import { asyncHandler, HttpError } from '../middleware/error';
 import { AuthedRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { ensureFamilyId } from '../lib/family';
 import { addFamilyMemberSchema } from '../schemas/family.schema';
 
 /** Vue renvoyée au frontend pour un membre de la famille. */
@@ -31,70 +32,37 @@ async function findSupabaseUserIdByEmail(email: string): Promise<string | null> 
   return null;
 }
 
-/** Courriel Supabase d'un utilisateur (null si introuvable). */
-async function findSupabaseEmailById(userId: string): Promise<string | null> {
-  const { data, error } = await supabase.auth.admin.getUserById(userId);
-  if (error || !data.user) return null;
-  return data.user.email?.toLowerCase() ?? null;
-}
-
 /**
- * Liste des membres de la famille de l'utilisateur connecté :
- * - ceux qu'il a invités,
- * - ceux qui l'ont invité (match sur son courriel).
- * Les liens « pending » pointant vers mon courriel deviennent « accepted ».
+ * Liste les membres de ma famille (moi exclu). L'acceptation des invitations
+ * « pending » pointant vers mon courriel se fait dans ensureFamilyId
+ * (src/lib/family.ts) — commune à toutes les routes.
  */
 export const getFamily = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const userId = req.authUser!.id;
   const myEmail = req.authUser!.email?.toLowerCase() ?? null;
   if (!myEmail) throw new HttpError(400, 'Courriel manquant sur le compte connecté');
 
-  // Auto-acceptation : je dispose d'un compte, donc un lien qui pointe
-  // vers mon courriel peut passer en « accepted » immédiatement.
-  await prisma.familyMember.updateMany({
-    where: { memberEmail: myEmail, status: 'pending' },
-    data: { status: 'accepted', memberUserId: userId },
+  const familyId = await ensureFamilyId(userId, myEmail);
+
+  // Tous les liens de ma famille, sauf ma propre ligne d'adhésion.
+  const links = await prisma.familyMember.findMany({
+    where: { familyId, memberUserId: { not: userId } },
+    include: { member: { select: { fullName: true } } },
+    orderBy: { createdAt: 'asc' },
   });
 
-  const [invited, invitedBy] = await Promise.all([
-    prisma.familyMember.findMany({
-      where: { ownerUserId: userId },
-      include: { member: { select: { fullName: true } } },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.familyMember.findMany({
-      where: { memberEmail: myEmail, ownerUserId: { not: userId } },
-      include: { owner: { select: { fullName: true } } },
-      orderBy: { createdAt: 'asc' },
-    }),
-  ]);
-
-  // Le courriel de l'inviteur n'est pas dans `profiles` → Supabase Auth.
-  const inviterEmails = await Promise.all(
-    invitedBy.map((m) => findSupabaseEmailById(m.ownerUserId)),
-  );
-
-  const members: FamilyMemberView[] = [
-    ...invited.map((m) => ({
-      id: m.id,
-      email: m.memberEmail,
-      fullName: m.member?.fullName ?? null,
-      status: m.status as 'pending' | 'accepted',
-      direction: 'invited' as const,
-    })),
-    ...invitedBy.map((m, i) => ({
-      id: m.id,
-      email: inviterEmails[i] ?? m.ownerUserId,
-      fullName: m.owner.fullName ?? null,
-      status: m.status as 'pending' | 'accepted',
-      direction: 'invited_by' as const,
-    })),
-  ];
+  const members: FamilyMemberView[] = links.map((l) => ({
+    id: l.id,
+    email: l.memberEmail,
+    fullName: l.member?.fullName ?? null,
+    status: l.status as 'pending' | 'accepted',
+    direction: l.invitedById === userId ? ('invited' as const) : ('invited_by' as const),
+  }));
 
   res.json(members);
 });
 
-/** Ajoute un membre de famille par courriel (pending tant qu'il n'a pas de compte). */
+/** Ajoute un membre à ma famille par courriel (pending tant qu'il n'a pas de compte). */
 export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const userId = req.authUser!.id;
   const myEmail = req.authUser!.email?.toLowerCase() ?? null;
@@ -102,46 +70,84 @@ export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Resp
 
   if (email === myEmail) throw new HttpError(400, 'Tu ne peux pas t’ajouter toi-même');
 
+  const familyId = await ensureFamilyId(userId, myEmail);
+
   // La personne a-t-elle déjà un compte ? → lien accepté immédiatement.
   const targetUserId = await findSupabaseUserIdByEmail(email);
 
-  // Lien déjà existant, dans un sens ou dans l'autre ?
+  // Déjà invité dans ma famille ?
   const alreadyInvited = await prisma.familyMember.findFirst({
-    where: { ownerUserId: userId, memberEmail: email },
+    where: { familyId, memberEmail: email },
   });
-  const alreadyInvitedBy =
-    targetUserId && myEmail
-      ? await prisma.familyMember.findFirst({
-          where: { ownerUserId: targetUserId, memberEmail: myEmail },
-        })
-      : null;
-  if (alreadyInvited || alreadyInvitedBy) {
+  if (alreadyInvited) {
     throw new HttpError(409, 'Ce courriel fait déjà partie de ta famille');
   }
 
-  const member = await prisma.familyMember.create({
-    data: {
-      ownerUserId: userId,
-      memberEmail: email,
-      memberUserId: targetUserId,
-      status: targetUserId ? 'accepted' : 'pending',
-    },
+  // La personne a-t-elle déjà rejoint une autre famille ?
+  if (targetUserId) {
+    const targetProfile = await prisma.profile.findUnique({
+      where: { userId: targetUserId },
+      select: { familyId: true },
+    });
+    if (targetProfile?.familyId && targetProfile.familyId !== familyId) {
+      throw new HttpError(409, 'Ce courriel fait déjà partie d’une autre famille');
+    }
+  }
+
+  const member = await prisma.$transaction(async (tx) => {
+    const created = await tx.familyMember.create({
+      data: {
+        familyId,
+        invitedById: userId,
+        memberEmail: email,
+        memberUserId: targetUserId,
+        status: targetUserId ? 'accepted' : 'pending',
+      },
+    });
+    // La personne a un compte et pas de famille → elle rejoint la nôtre immédiatement.
+    if (targetUserId) {
+      await tx.profile.updateMany({
+        where: { userId: targetUserId, familyId: null },
+        data: { familyId },
+      });
+    }
+    return created;
   });
   res.status(201).json(member);
 });
 
-/** Retire un lien de famille (le propriétaire ou la personne invitée peuvent le faire). */
+/** Retire un membre de ma famille (l'inviteur ou la personne invitée peuvent le faire). */
 export const removeFamilyMember = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const userId = req.authUser!.id;
-  const myEmail = req.authUser!.email?.toLowerCase() ?? null;
   const { id } = req.params;
 
   const member = await prisma.familyMember.findUnique({ where: { id } });
   if (!member) throw new HttpError(404, 'Membre introuvable');
-  if (member.ownerUserId !== userId && member.memberEmail !== myEmail) {
+
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { familyId: true },
+  });
+  const myFamilyId = profile?.familyId ?? null;
+
+  // Le lien doit concerner ma famille, et seul l'inviteur ou l'invité peut le retirer.
+  if (member.familyId !== myFamilyId) {
+    throw new HttpError(404, 'Membre introuvable');
+  }
+  if (member.invitedById !== userId && member.memberUserId !== userId) {
     throw new HttpError(403, 'Tu ne peux retirer que les membres de ta famille');
   }
 
-  await prisma.familyMember.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.familyMember.delete({ where: { id } });
+    // Le membre retiré quitte la famille (sa prochaine visite créera une
+    // famille solo ou l'acceptation d'une autre invitation).
+    if (member.memberUserId) {
+      await tx.profile.updateMany({
+        where: { userId: member.memberUserId, familyId: member.familyId },
+        data: { familyId: null },
+      });
+    }
+  });
   res.status(204).send();
 });

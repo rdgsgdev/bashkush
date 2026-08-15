@@ -145,14 +145,26 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(`  ✓ ${DEFAULT_AISLES.length} rayons`);
 
-  // Plats
+  // Plats — rattachés à la famille du profil le plus ancien (les plats sont
+  // désormais scopés par famille). Sans profil en base, on crée une famille
+  // dédiée au seed.
+  const firstProfile = await prisma.profile.findFirst({ orderBy: { createdAt: 'asc' } });
+  let familyId = firstProfile?.familyId ?? null;
+  if (!familyId) {
+    const family = await prisma.family.create({});
+    familyId = family.id;
+  }
+
   for (const meal of SEED_MEALS) {
     const { ingredients, steps, ...mealData } = meal as any;
     await prisma.meal.upsert({
       where: { id: mealData.id },
-      update: {},
+      // Re-rattache aussi à l'update : les plats de seed suivent la famille
+      // du profil le plus ancien (utile tant qu'aucun utilisateur n'existe).
+      update: { familyId },
       create: {
         ...mealData,
+        familyId,
         ingredients: { create: ingredients.map((i: any) => ({ ...i, optional: i.optional ?? false })) },
         steps: { create: steps.map((s: any) => ({ ...s, ingredients: s.ingredients ?? [] })) },
       },

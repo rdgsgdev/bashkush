@@ -4,26 +4,31 @@ import { createMealSchema, updateMealSchema, CreateMealInput, UpdateMealInput } 
 import { generateMealId } from '../lib/id';
 import { uploadImage, deleteImage } from '../lib/storage';
 import { run } from '../lib/groceryEngine';
-import type { Response, Request } from 'express';
+import { ensureFamilyId } from '../lib/family';
+import { AuthedRequest } from '../middleware/auth';
+import type { Response } from 'express';
 
 const mealInclude = {
   ingredients: { orderBy: { name: 'asc' as const } },
   steps: { orderBy: { stepNumber: 'asc' as const } },
 } as const;
 
-/** GET /api/meals — liste (favoris en premier, puis created_at desc). */
-export const listMeals = asyncHandler(async (_req, res: Response) => {
+/** GET /api/meals — liste de la famille (favoris en premier, puis created_at desc). */
+export const listMeals = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
   const meals = await prisma.meal.findMany({
+    where: { familyId },
     orderBy: [{ isFavorite: 'desc' }, { createdAt: 'desc' }],
     include: mealInclude,
   });
   res.json(meals);
 });
 
-/** GET /api/meals/:id — détail d'un repas. */
-export const getMeal = asyncHandler(async (req, res: Response) => {
-  const meal = await prisma.meal.findUnique({
-    where: { id: req.params.id },
+/** GET /api/meals/:id — détail d'un repas (404 si hors de la famille). */
+export const getMeal = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const meal = await prisma.meal.findFirst({
+    where: { id: req.params.id, familyId },
     include: mealInclude,
   });
   if (!meal) throw new HttpError(404, 'Repas introuvable');
@@ -68,8 +73,9 @@ function buildMealData(input: CreateMealInput | UpdateMealInput) {
   return data;
 }
 
-/** POST /api/meals — crée un repas (création manuelle ou import JSON). */
-export const createMeal = asyncHandler(async (req, res: Response) => {
+/** POST /api/meals — crée un repas pour la famille (création manuelle ou import JSON). */
+export const createMeal = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
   const input = createMealSchema.parse(req.body) as CreateMealInput;
   const id = input.id || generateMealId(input.name);
 
@@ -78,19 +84,20 @@ export const createMeal = asyncHandler(async (req, res: Response) => {
   if (existing) throw new HttpError(409, `Un repas avec l'id « ${id} » existe déjà`);
 
   const meal = await prisma.meal.create({
-    data: { id, ...buildMealData(input) },
+    data: { id, familyId, ...buildMealData(input) },
     include: mealInclude,
   });
   res.status(201).json(meal);
 });
 
-/** PUT /api/meals/:id — met à jour un repas. */
-export const updateMeal = asyncHandler(async (req, res: Response) => {
+/** PUT /api/meals/:id — met à jour un repas de la famille. */
+export const updateMeal = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const id = req.params.id;
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
   const input = updateMealSchema.parse(req.body) as UpdateMealInput;
 
   const meal = await run(prisma, async (tx) => {
-    const existing = await tx.meal.findUnique({ where: { id } });
+    const existing = await tx.meal.findFirst({ where: { id, familyId } });
     if (!existing) throw new HttpError(404, 'Repas introuvable');
 
     // Pour les ingrédients/étapes : on remplace intégralement.
@@ -107,10 +114,11 @@ export const updateMeal = asyncHandler(async (req, res: Response) => {
   res.json(meal);
 });
 
-/** DELETE /api/meals/:id — supprime un repas (cascade sur plans/ingrédients/étapes). */
-export const deleteMeal = asyncHandler(async (req, res: Response) => {
+/** DELETE /api/meals/:id — supprime un repas de la famille (cascade sur plans/ingrédients/étapes). */
+export const deleteMeal = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const id = req.params.id;
-  const meal = await prisma.meal.findUnique({ where: { id } });
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const meal = await prisma.meal.findFirst({ where: { id, familyId } });
   if (!meal) throw new HttpError(404, 'Repas introuvable');
 
   await deleteImage(meal.imagePath);
@@ -119,9 +127,10 @@ export const deleteMeal = asyncHandler(async (req, res: Response) => {
 });
 
 /** PATCH /api/meals/:id/favorite — bascule le statut favori. */
-export const toggleFavorite = asyncHandler(async (req, res: Response) => {
+export const toggleFavorite = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const id = req.params.id;
-  const meal = await prisma.meal.findUnique({ where: { id } });
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const meal = await prisma.meal.findFirst({ where: { id, familyId } });
   if (!meal) throw new HttpError(404, 'Repas introuvable');
   const updated = await prisma.meal.update({
     where: { id },
@@ -130,10 +139,11 @@ export const toggleFavorite = asyncHandler(async (req, res: Response) => {
   res.json(updated);
 });
 
-/** POST /api/meals/:id/image — téléverse la photo d'un repas. */
-export const uploadMealImage = asyncHandler(async (req: Request, res: Response) => {
+/** POST /api/meals/:id/image — téléverse la photo d'un repas de la famille. */
+export const uploadMealImage = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const id = req.params.id;
-  const meal = await prisma.meal.findUnique({ where: { id } });
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const meal = await prisma.meal.findFirst({ where: { id, familyId } });
   if (!meal) throw new HttpError(404, 'Repas introuvable');
   if (!req.file) throw new HttpError(400, 'Aucune image reçue');
 

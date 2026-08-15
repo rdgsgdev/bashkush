@@ -30,7 +30,7 @@ Renseignez `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (voir `frontend/.env.
 
 Côté backend, chaque requête `/api/*` (sauf `/health`) doit porter un jeton `Authorization: Bearer <token>` valide — le middleware `backend/src/middleware/auth.ts` vérifie la session auprès de Supabase et renvoie `401` sinon.
 
-> ℹ️ Les données (plats, calendrier, listes) restent **partagées** entre tous les utilisateurs connectés — l'authentification protège l'accès à l'application.
+> ℹ️ Les données (plats, calendrier, listes de courses) sont **scopées à la famille** : chaque utilisateur voit uniquement les données de sa famille (invitation par courriel depuis la page profil). Un utilisateur sans famille obtient un espace solo créé automatiquement à la première utilisation.
 
 ---
 

@@ -44,20 +44,22 @@ export async function planMeal(
   tx: Tx,
   params: {
     meal: Meal & { ingredients: Ingredient[] };
+    familyId: string;
     fromDate: Date;
     toDate: Date;
     servings: number;
     status: string;
   },
 ): Promise<MealPlan> {
-  const { meal, fromDate, toDate, servings, status } = params;
+  const { meal, familyId, fromDate, toDate, servings, status } = params;
 
   const plan = await tx.mealPlan.create({
-    data: { mealId: meal.id, fromDate, toDate, servings, status },
+    data: { familyId, mealId: meal.id, fromDate, toDate, servings, status },
   });
 
   await addContributions(tx, {
     mealPlanId: plan.id,
+    familyId,
     ingredients: meal.ingredients,
     planServings: servings,
     mealServings: meal.servings,
@@ -71,12 +73,13 @@ async function addContributions(
   tx: Tx,
   args: {
     mealPlanId: string;
+    familyId: string;
     ingredients: Ingredient[];
     planServings: number;
     mealServings: number;
   },
 ): Promise<void> {
-  const { mealPlanId, ingredients, planServings, mealServings } = args;
+  const { mealPlanId, familyId, ingredients, planServings, mealServings } = args;
 
   // Ingrédients mis à l'échelle (on ignore les quantités nulles).
   const scaled = ingredients
@@ -84,14 +87,15 @@ async function addContributions(
     .filter((x) => x.qty > 0);
   if (scaled.length === 0) return;
 
-  // 1) Charge tous les items actifs en UNE requête (set petit pour un usage perso).
-  const activeItems = await tx.groceryItem.findMany({ where: { archived: false } });
+  // 1) Charge tous les items actifs de la famille en UNE requête (set petit pour un usage perso).
+  const activeItems = await tx.groceryItem.findMany({ where: { familyId, archived: false } });
   const itemIdByKey = new Map<string, string>();
   for (const it of activeItems) itemIdByKey.set(itemKey(it.name, it.unit, it.aisle), it.id);
 
   // 2) Répartit en mémoire : nouveaux items / deltas sur items existants / contributions.
   const newItems: Array<{
     id: string;
+    familyId: string;
     name: string;
     unit: string;
     aisle: string;
@@ -118,7 +122,7 @@ async function addContributions(
       // Nouvel item : UUID généré pour pouvoir lier la contribution + dédupliquer.
       const id = randomUUID();
       itemIdByKey.set(key, id);
-      newItems.push({ id, name: ing.name, unit: ing.unit, aisle: ing.aisle, quantity: qty, isManual: false });
+      newItems.push({ id, familyId, name: ing.name, unit: ing.unit, aisle: ing.aisle, quantity: qty, isManual: false });
       contributionsToCreate.push({ groceryItemId: id, mealPlanId, ingredientId: ing.id, quantity: qty });
     }
   }
@@ -232,6 +236,7 @@ export async function updateMealPlan(
     await removeContributions(tx, plan.id);
     await addContributions(tx, {
       mealPlanId: plan.id,
+      familyId: plan.familyId,
       ingredients: meal.ingredients,
       planServings: input.servings ?? plan.servings,
       mealServings: meal.servings,

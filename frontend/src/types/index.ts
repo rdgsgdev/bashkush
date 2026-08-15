@@ -31,6 +31,7 @@ export interface Step {
 
 export interface Meal {
   id: string;
+  familyId?: string; // visibilité : plats de la famille uniquement
   name: string;
   description?: string | null;
   servings: number;
@@ -69,6 +70,7 @@ export interface MealDraft {
 
 export interface MealPlan {
   id: string;
+  familyId?: string; // visibilité : planifications de la famille uniquement
   mealId: string;
   fromDate: string;
   toDate: string;
@@ -81,6 +83,7 @@ export interface MealPlan {
 
 export interface GroceryItem {
   id: string;
+  familyId?: string; // visibilité : liste propre à chaque famille
   name: string;
   quantity: number;
   unit: string;

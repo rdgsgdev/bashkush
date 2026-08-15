@@ -86,6 +86,18 @@ npm run seed             # charge les rayons par défaut + 3 plats d'exemple
 
 > `prisma db push` utilise `DIRECT_URL` (connexion directe). L'application utilise `DATABASE_URL` (poolée) à l'exécution.
 
+### Migration « familles » (une seule fois)
+
+Les données (plats, planifications, listes de courses) sont scopées à une famille (table `families`, colonne `family_id`). Sur une base existante du modèle précédent (données globales, liens pair-à-pair), exécuter dans l'ordre :
+
+```bash
+npx tsx scripts/migrate-families.ts   # crée les familles, migre les liens, backfill family_id
+npx prisma db push                    # synchronise contraintes/index, supprime l'ancienne colonne owner_user_id
+npx prisma generate                   # régénère le client Prisma
+```
+
+Le script est idempotent : les données existantes sont attribuées à la famille du profil le plus ancien, et chaque groupe d'utilisateurs liés pair-à-pair devient une famille unique.
+
 ---
 
 ## 4. Bucket Storage (images)

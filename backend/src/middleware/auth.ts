@@ -9,8 +9,9 @@ export interface AuthedRequest extends Request {
 
 /**
  * Vérifie le jeton Supabase (Authorization: Bearer <token>) envoyé par le frontend.
- * Renvoie 401 si absent ou invalide. Les données restent partagées entre
- * utilisateurs connectés — ce middleware protège uniquement l'accès à l'API.
+ * Renvoie 401 si absent ou invalide. Les données métier (plats, calendrier,
+ * listes) sont scopées à la famille de l'utilisateur — ce middleware identifie
+ * l'utilisateur, les contrôleurs appliquent le filtrage par famille.
  */
 export const requireAuth = async (req: AuthedRequest, _res: Response, next: NextFunction) => {
   try {
