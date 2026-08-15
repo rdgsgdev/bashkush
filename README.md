@@ -6,17 +6,18 @@ Application web **mobile-first** de **création et planification de plats** avec
 - 📅 **Planifiez** vos repas sur un calendrier (plages de dates, portions, statut).
 - 🛒 La **liste de courses** se génère automatiquement à partir du planning, **regroupée par rayons**, agrégée et éditable.
 
-> 100 % en français · connexion **Apple / Google** · pensé mobile d'abord.
+> 100 % en français · connexion **Google** · pensé mobile d'abord.
 
 ---
 
-## 🔐 Authentification (Apple / Google)
+## 🔐 Authentification (Google)
 
-L'application exige une connexion via **Supabase Auth** avec les providers **Apple** et **Google** (pas de création de compte courriel/mot de passe).
+L'application exige une connexion via **Supabase Auth** avec le provider **Google** (pas de création de compte courriel/mot de passe).
 
-### 1. Activer les providers dans Supabase
+> ℹ️ Le provider Apple pourrait être ajouté plus tard, mais il nécessite un compte Apple Developer payant (99 $/an).
+
+### 1. Activer le provider dans Supabase
 - **Google** : dashboard Supabase → **Authentication → Providers → Google** → activer, puis renseigner le *Client ID* et le *Client Secret* d'une application OAuth Google (console Google Cloud → Credentials → OAuth Client ID, type *Web application* ; URI de redirection autorisée : `https://VOTRE-PROJET.supabase.co/auth/v1/callback`).
-- **Apple** : dashboard Supabase → **Authentication → Providers → Apple** → activer, puis renseigner le *Secret Key* (clé `.p8`), le *Services ID*, le *Apple Team ID* et le *Key ID* depuis le compte [Apple Developer](https://developer.apple.com) (Configuration → Identifiers → **Services ID** ; domaine `VOTRE-PROJET.supabase.co` et URL de retour `https://VOTRE-PROJET.supabase.co/auth/v1/callback`).
 
 ### 2. URLs de redirection
 Dans **Authentication → URL Configuration**, ajoutez l'URL du site dans *Redirect URLs* :

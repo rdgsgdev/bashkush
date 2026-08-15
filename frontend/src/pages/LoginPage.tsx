@@ -1,15 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
-/** Logo Apple (officiel, SVG inline). */
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden>
-      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8.98-.2 1.92-.86 3.54-.77 1.25.1 2.19.6 2.81 1.5-2.57 1.54-2.14 4.93.42 5.88-.5 1.32-1.15 2.63-2.15 3.96.1-.06.2-.12.3-.18v-.02ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.32-2.05 4.17-3.74 4.25Z" />
-    </svg>
-  );
-}
-
 /** Logo Google "G" multicolore (officiel, SVG inline). */
 function GoogleIcon() {
   return (
@@ -34,68 +25,55 @@ function GoogleIcon() {
   );
 }
 
-type Provider = 'apple' | 'google';
-
 export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Provider | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const signIn = async (provider: Provider) => {
+  const signInWithGoogle = async () => {
     setError(null);
-    setPending(provider);
+    setPending(true);
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider,
+      provider: 'google',
       options: { redirectTo: window.location.origin },
     });
     if (oauthError) {
       setError(
-        provider === 'apple'
-          ? 'Impossible de démarrer la connexion avec Apple. Vérifiez que le provider est activé dans Supabase.'
-          : 'Impossible de démarrer la connexion avec Google. Vérifiez que le provider est activé dans Supabase.',
+        'Impossible de démarrer la connexion avec Google. Vérifiez que le provider est activé dans Supabase.',
       );
-      setPending(null);
+      setPending(false);
       return;
     }
-    // Succès → le navigateur est redirigé vers Apple / Google,
+    // Succès → le navigateur est redirigé vers Google,
     // puis revient sur l'app où la session est détectée automatiquement.
   };
-
-  const buttonBase =
-    'flex w-full items-center justify-center gap-3 rounded-xl px-4 py-3.5 text-sm font-semibold transition disabled:opacity-60';
 
   return (
     <div className="relative flex min-h-dvh flex-col bg-brand-500">
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
-        <h1 className="mb-6 text-center text-2xl font-bold text-white">
-          Bienvenue sur Bashkush
+        <h1 className="mb-6 text-center text-2xl text-white">
+          Veuillez vous connecter pour commencer à faire du
         </h1>
+        <h2 className="mb-6 text-center text-2xl font-bold italic text-white">
+          BashhhhhKuuuuuush!
+        </h2>
 
         <button
-          onClick={() => signIn('apple')}
-          disabled={pending !== null}
-          className={`${buttonBase} bg-black text-white active:scale-[0.98]`}
-        >
-          <AppleIcon />
-          {pending === 'apple' ? 'Connexion…' : 'Continuer avec Apple'}
-        </button>
-
-        <button
-          onClick={() => signIn('google')}
-          disabled={pending !== null}
-          className={`${buttonBase} bg-white text-stone-700 shadow-sm active:scale-[0.98]`}
+          onClick={signInWithGoogle}
+          disabled={pending}
+          className="flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3.5 text-sm font-semibold text-stone-700 shadow-sm transition active:scale-[0.98] disabled:opacity-60"
         >
           <GoogleIcon />
-          {pending === 'google' ? 'Connexion…' : 'Continuer avec Google'}
+          {pending ? 'Connexion…' : 'Continuer avec Google'}
         </button>
 
         {error && <p className="mt-2 max-w-xs text-center text-xs text-white/90">{error}</p>}
       </div>
 
-      {/* Logo BashKush — bas gauche, comme demandé */}
+      {/* Logo Bashkush — bas gauche */}
       <img
         src="/logo-menu.png"
         alt="Bashkush"
-        className="absolute bottom-4 left-4 h-16 w-auto object-contain"
+        className="absolute bottom-4 left-4 h-40 w-auto object-contain"
       />
     </div>
   );
