@@ -8,4 +8,5 @@ export const queryKeys = {
   aisles: ['aisles'] as const,
   profile: ['profile'] as const,
   family: ['family'] as const,
+  familyInvitations: ['family', 'invitations'] as const,
 };

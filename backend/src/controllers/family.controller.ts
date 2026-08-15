@@ -16,6 +16,13 @@ export interface FamilyMemberView {
   direction: 'invited' | 'invited_by';
 }
 
+/** Vue renvoyée au frontend pour une invitation reçue d'une autre famille. */
+export interface FamilyInvitationView {
+  id: string;
+  inviterEmail: string | null;
+  inviterName: string | null;
+}
+
 /** Cherche un utilisateur Supabase par courriel (pagination simple). */
 async function findSupabaseUserIdByEmail(email: string): Promise<string | null> {
   let page = 1;
@@ -62,7 +69,7 @@ export const getFamily = asyncHandler(async (req: AuthedRequest, res: Response) 
   res.json(members);
 });
 
-/** Ajoute un membre à ma famille par courriel (pending tant qu'il n'a pas de compte). */
+/** Ajoute un membre à ma famille par courriel (pending tant qu'il n'a pas rejoint). */
 export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const userId = req.authUser!.id;
   const myEmail = req.authUser!.email?.toLowerCase() ?? null;
@@ -83,16 +90,24 @@ export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Resp
     throw new HttpError(409, 'Ce courriel fait déjà partie de ta famille');
   }
 
-  // La personne a-t-elle déjà rejoint une autre famille ?
+  // La personne a-t-elle déjà rejoint une autre famille ? → invitation en
+  // attente : elle pourra l'accepter (et remplacer sa famille) depuis son
+  // propre profil, via POST /family/invitations/:id/accept.
+  let targetFamilyId: string | null = null;
   if (targetUserId) {
     const targetProfile = await prisma.profile.findUnique({
       where: { userId: targetUserId },
       select: { familyId: true },
     });
-    if (targetProfile?.familyId && targetProfile.familyId !== familyId) {
-      throw new HttpError(409, 'Ce courriel fait déjà partie d’une autre famille');
+    targetFamilyId = targetProfile?.familyId ?? null;
+    if (targetFamilyId === familyId) {
+      throw new HttpError(409, 'Ce courriel fait déjà partie de ta famille');
     }
   }
+
+  // Accepté immédiatement seulement si la personne a un compte et aucune
+  // famille ; sinon (pas de compte, ou déjà dans une autre famille) → pending.
+  const autoAccept = Boolean(targetUserId) && !targetFamilyId;
 
   const member = await prisma.$transaction(async (tx) => {
     const created = await tx.familyMember.create({
@@ -101,11 +116,11 @@ export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Resp
         invitedById: userId,
         memberEmail: email,
         memberUserId: targetUserId,
-        status: targetUserId ? 'accepted' : 'pending',
+        status: autoAccept ? 'accepted' : 'pending',
       },
     });
     // La personne a un compte et pas de famille → elle rejoint la nôtre immédiatement.
-    if (targetUserId) {
+    if (autoAccept && targetUserId) {
       await tx.profile.updateMany({
         where: { userId: targetUserId, familyId: null },
         data: { familyId },
@@ -149,5 +164,106 @@ export const removeFamilyMember = asyncHandler(async (req: AuthedRequest, res: R
       });
     }
   });
+  res.status(204).send();
+});
+
+/**
+ * Liste les invitations en attente qui me sont adressées par d'autres
+ * familles. Une personne ayant déjà une famille doit accepter explicitement
+ * pour que son family_id soit remplacé.
+ */
+export const listFamilyInvitations = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const userId = req.authUser!.id;
+  const myEmail = req.authUser!.email?.toLowerCase() ?? null;
+  if (!myEmail) throw new HttpError(400, 'Courriel manquant sur le compte connecté');
+
+  const familyId = await ensureFamilyId(userId, myEmail);
+
+  const invitations = await prisma.familyMember.findMany({
+    where: { memberEmail: myEmail, status: 'pending', familyId: { not: familyId } },
+    include: { inviter: { select: { fullName: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Courriel de l'inviteur : sa propre ligne d'adhésion dans sa famille.
+  const views: FamilyInvitationView[] = await Promise.all(
+    invitations.map(async (inv) => {
+      const inviterLink = await prisma.familyMember.findFirst({
+        where: { familyId: inv.familyId, memberUserId: inv.invitedById },
+        select: { memberEmail: true },
+      });
+      return {
+        id: inv.id,
+        inviterEmail: inviterLink?.memberEmail ?? null,
+        inviterName: inv.inviter?.fullName ?? null,
+      };
+    }),
+  );
+
+  res.json(views);
+});
+
+/** Accepte une invitation : quitte mon ancienne famille et remplace mon family_id. */
+export const acceptFamilyInvitation = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const userId = req.authUser!.id;
+  const myEmail = req.authUser!.email?.toLowerCase() ?? null;
+  if (!myEmail) throw new HttpError(400, 'Courriel manquant sur le compte connecté');
+  const { id } = req.params;
+
+  const familyId = await prisma.$transaction(async (tx) => {
+    const invitation = await tx.familyMember.findUnique({ where: { id } });
+    if (!invitation || invitation.memberEmail !== myEmail || invitation.status !== 'pending') {
+      throw new HttpError(404, 'Invitation introuvable');
+    }
+
+    const profile = await tx.profile.findUnique({
+      where: { userId },
+      select: { familyId: true },
+    });
+    const oldFamilyId = profile?.familyId ?? null;
+    if (invitation.familyId === oldFamilyId) {
+      throw new HttpError(409, 'Tu fais déjà partie de cette famille');
+    }
+
+    // Je quitte mon ancienne famille (mes plats/listes y restent rattachés).
+    if (oldFamilyId) {
+      await tx.familyMember.deleteMany({
+        where: { familyId: oldFamilyId, memberUserId: userId },
+      });
+    }
+
+    // Invitation acceptée + nouveau family_id (source de vérité).
+    await tx.familyMember.update({
+      where: { id },
+      data: { status: 'accepted', memberUserId: userId },
+    });
+    await tx.profile.upsert({
+      where: { userId },
+      update: { familyId: invitation.familyId },
+      create: {
+        userId,
+        goals: [],
+        medicalConditions: [],
+        foodChoices: [],
+        familyId: invitation.familyId,
+      },
+    });
+    return invitation.familyId;
+  });
+
+  res.json({ familyId });
+});
+
+/** Refuse une invitation : la ligne d'invitation est supprimée. */
+export const declineFamilyInvitation = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const myEmail = req.authUser!.email?.toLowerCase() ?? null;
+  if (!myEmail) throw new HttpError(400, 'Courriel manquant sur le compte connecté');
+  const { id } = req.params;
+
+  const deleted = await prisma.familyMember.deleteMany({
+    where: { id, memberEmail: myEmail, status: 'pending' },
+  });
+  if (!deleted.count) throw new HttpError(404, 'Invitation introuvable');
+
   res.status(204).send();
 });

@@ -10,3 +10,11 @@ export interface FamilyMemberView {
   /** invited = c'est moi qui ai invité ; invited_by = c'est lui qui m'a invité. */
   direction: 'invited' | 'invited_by';
 }
+
+// ── Invitations reçues d'une autre famille (GET /family/invitations) ──
+
+export interface FamilyInvitationView {
+  id: string;
+  inviterEmail: string | null;
+  inviterName: string | null;
+}
