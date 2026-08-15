@@ -143,6 +143,7 @@ model Ingredient {
   aisle    String // clé de rayon (ex: fruits_legumes) ou rayon personnalisé
   optional Boolean @default(false)
   notes    String?
+  nutrition Json? // { calories, protein, carbs, fat, fiber, quantity } — apports pour `quantity` unités
 
   meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
 

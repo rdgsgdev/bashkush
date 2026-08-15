@@ -18,6 +18,13 @@ export const nutritionSchema = z
   })
   .partial();
 
+// Apports portés par un ingrédient : valeurs données pour `quantity` unités
+// (défaut : la quantité de l'ingrédient). Sert à recalculer les apports par
+// portion du plat quand les quantités évoluent.
+export const ingredientNutritionSchema = nutritionSchema.extend({
+  quantity: z.number().positive().optional(),
+});
+
 export const ingredientSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -26,6 +33,7 @@ export const ingredientSchema = z.object({
   aisle: aisleName,
   optional: z.boolean().optional().default(false),
   notes: z.string().optional().nullable(),
+  nutrition: ingredientNutritionSchema.optional().nullable(),
 });
 
 export const stepSchema = z.object({

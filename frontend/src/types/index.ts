@@ -12,6 +12,11 @@ export interface Nutrition {
   fiber?: number;
 }
 
+/** Apports d'un ingrédient : valeurs données pour `quantity` unités (défaut : sa quantité). */
+export interface IngredientNutrition extends Nutrition {
+  quantity?: number;
+}
+
 export interface Ingredient {
   id: string;
   name: string;
@@ -20,6 +25,7 @@ export interface Ingredient {
   aisle: string;
   optional?: boolean;
   notes?: string | null;
+  nutrition?: IngredientNutrition | null;
 }
 
 export interface Step {

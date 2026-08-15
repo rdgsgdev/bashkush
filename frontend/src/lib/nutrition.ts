@@ -2,6 +2,11 @@
 // Miroir de backend/src/lib/nutrition.ts — affichage réactif dans le
 // profil. Le backend reste la source de vérité (valeurs persistées).
 
+import type { IngredientNutrition, Nutrition } from '../types';
+
+export const NUTRITION_KEYS = ['calories', 'protein', 'carbs', 'fat', 'fiber'] as const;
+export type NutritionKey = (typeof NUTRITION_KEYS)[number];
+
 export interface NutritionInput {
   heightCm?: number | null;
   weightKg?: number | null;
@@ -72,4 +77,70 @@ export function computeDailyTargets(input: NutritionInput): DailyTargets | null 
   const dailyProtein = Math.round((weightKg * proteinPerKg) / 5) * 5;
 
   return { dailyCalories, dailyProtein };
+}
+
+// ── Apports d'un plat calculés depuis ses ingrédients ────────
+// Miroir de computePerPortionNutrition (backend/src/controllers/meals.controller.ts).
+
+/** Apports d'un ingrédient ramenés à sa quantité actuelle (vide si non renseignés). */
+export function ingredientContribution(ing: {
+  quantity?: number;
+  nutrition?: IngredientNutrition | null;
+}): Partial<Record<NutritionKey, number>> {
+  const n = ing.nutrition;
+  if (!n) return {};
+  const qty = Number.isFinite(ing.quantity) ? (ing.quantity as number) : 0;
+  const ref = Number.isFinite(n.quantity) && (n.quantity as number) > 0 ? (n.quantity as number) : qty;
+  if (ref <= 0 || qty <= 0) return {};
+  const factor = qty / ref;
+  const out: Partial<Record<NutritionKey, number>> = {};
+  for (const key of NUTRITION_KEYS) {
+    const v = n[key];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[key] = v * factor;
+  }
+  return out;
+}
+
+/** Apports par portion d'un plat : somme des contributions ÷ portions (null si aucune donnée). */
+export function computeMealNutrition(
+  ingredients: { quantity?: number; nutrition?: IngredientNutrition | null }[],
+  servings?: number | null,
+): Nutrition | null {
+  const totals: Partial<Record<NutritionKey, number>> = {};
+  for (const ing of ingredients) {
+    for (const [key, value] of Object.entries(ingredientContribution(ing)) as [NutritionKey, number][]) {
+      totals[key] = (totals[key] ?? 0) + value;
+    }
+  }
+  const used = NUTRITION_KEYS.filter((key) => totals[key] !== undefined);
+  if (used.length === 0) return null;
+  const portions = servings && servings > 0 ? servings : 1;
+  const result: Nutrition = {};
+  for (const key of used) {
+    const total = totals[key] as number;
+    result[key] = key === 'calories' ? Math.round(total / portions) : Math.round((total / portions) * 10) / 10;
+  }
+  return result;
+}
+
+/** Nettoie la nutrition importée (JSON/IA) et fixe la quantité de référence des apports. */
+export function parseIngredientNutrition(raw: unknown, fallbackQty?: number): IngredientNutrition | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const nutrition: Partial<Record<NutritionKey, number>> = {};
+  for (const key of NUTRITION_KEYS) {
+    const v = obj[key];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) nutrition[key] = v;
+  }
+  if (!NUTRITION_KEYS.some((key) => nutrition[key] !== undefined)) return undefined;
+  const result: IngredientNutrition = { ...nutrition };
+  const ref = obj.quantity;
+  if (typeof ref === 'number' && Number.isFinite(ref) && ref > 0) result.quantity = ref;
+  else if (fallbackQty !== undefined && Number.isFinite(fallbackQty) && fallbackQty > 0) result.quantity = fallbackQty;
+  return result;
+}
+
+/** true si la nutrition contient au moins une valeur exploitable. */
+export function hasNutritionValues(n?: IngredientNutrition | null): boolean {
+  return Boolean(n && NUTRITION_KEYS.some((key) => n[key] !== undefined));
 }

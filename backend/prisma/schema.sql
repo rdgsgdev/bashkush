@@ -74,6 +74,7 @@ CREATE TABLE "ingredients" (
     "aisle" TEXT NOT NULL,
     "optional" BOOLEAN NOT NULL DEFAULT false,
     "notes" TEXT,
+    "nutrition" JSONB,
 
     CONSTRAINT "ingredients_pkey" PRIMARY KEY ("meal_id","id")
 );

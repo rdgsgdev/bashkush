@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, Trash2, Plus, ImageIcon, AlertCircle } from 'lucide-react';
+import { Upload, Trash2, Plus, ImageIcon, AlertCircle, ChevronDown } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Field, Input, Textarea, Select } from '../ui/FormControl';
@@ -12,7 +12,13 @@ import {
   useUploadMealImage,
 } from '../../api/meals';
 import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS, AISLE_OPTIONS_LIST, UNIT_OPTIONS } from '../../lib/options';
-import type { Ingredient, Meal, MealDraft, Nutrition, Step } from '../../types';
+import {
+  computeMealNutrition,
+  hasNutritionValues,
+  parseIngredientNutrition,
+  NutritionKey,
+} from '../../lib/nutrition';
+import type { Ingredient, IngredientNutrition, Meal, MealDraft, Step } from '../../types';
 
 interface MealEditionModalProps {
   meal?: Meal | null; // null/undefined = création
@@ -26,18 +32,14 @@ type DraftIngredient = Omit<Ingredient, 'quantity'> & { quantity?: number };
 /** Brouillon interne : quantités d'ingrédients optionnelles pendant l'édition. */
 type MealEditionDraft = Omit<MealDraft, 'ingredients'> & { ingredients: DraftIngredient[] };
 
-/** Somme des quantités (toutes unités confondues), base de mise à l'échelle des apports. */
-const sumQuantities = (ings: { quantity?: number }[]): number =>
-  ings.reduce((sum, i) => sum + (Number.isFinite(i.quantity) ? (i.quantity as number) : 0), 0);
-
-/** Met à l'échelle les apports par portion selon l'évolution des quantités. */
-const scaleNutrition = (nutrition: Nutrition, ratio: number): Nutrition => ({
-  calories: nutrition.calories !== undefined ? Math.round(nutrition.calories * ratio) : undefined,
-  protein: nutrition.protein !== undefined ? Math.round(nutrition.protein * ratio * 10) / 10 : undefined,
-  carbs: nutrition.carbs !== undefined ? Math.round(nutrition.carbs * ratio * 10) / 10 : undefined,
-  fat: nutrition.fat !== undefined ? Math.round(nutrition.fat * ratio * 10) / 10 : undefined,
-  fiber: nutrition.fiber !== undefined ? Math.round(nutrition.fiber * ratio * 10) / 10 : undefined,
-});
+/** Champs d'apports éditables par ingrédient (kcal, protéines, glucides, lipides, fibres). */
+const NUTRIENT_FIELDS: readonly { key: NutritionKey; label: string }[] = [
+  { key: 'calories', label: 'kcal' },
+  { key: 'protein', label: 'Prot' },
+  { key: 'carbs', label: 'Gluc' },
+  { key: 'fat', label: 'Lip' },
+  { key: 'fiber', label: 'Fib' },
+];
 
 const blankDraft = (): MealEditionDraft => ({
   name: '',
@@ -87,13 +89,11 @@ const newStep = (n: number): Step => ({ stepNumber: n, instruction: '', time: un
 export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps) {
   const isEdit = Boolean(meal);
   const [draft, setDraft] = useState<MealEditionDraft>(meal ? toDraft(meal) : blankDraft());
-  // Référence des apports (nutrition + quantité totale) servant de base à la mise à l'échelle.
-  const [nutritionBase, setNutritionBase] = useState<{ nutrition: Nutrition; totalQty: number } | null>(
-    meal?.nutrition ? { nutrition: meal.nutrition, totalQty: sumQuantities(meal.ingredients) } : null,
-  );
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(meal?.imageUrl ?? null);
   const [error, setError] = useState<string | null>(null);
+  // Identifiant de l'ingrédient dont le bloc « Apports » est déplié.
+  const [openNutritionId, setOpenNutritionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,23 +106,16 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
   useEffect(() => {
     if (open) {
       setDraft(meal ? toDraft(meal) : blankDraft());
-      setNutritionBase(
-        meal?.nutrition ? { nutrition: meal.nutrition, totalQty: sumQuantities(meal.ingredients) } : null,
-      );
       setPendingImage(null);
       setImagePreview(meal?.imageUrl ?? null);
       setError(null);
+      setOpenNutritionId(null);
     }
   }, [open, meal]);
 
   // Quand un repas est fourni en édition mais ses données changent.
   useEffect(() => {
-    if (meal) {
-      setDraft(toDraft(meal));
-      setNutritionBase(
-        meal.nutrition ? { nutrition: meal.nutrition, totalQty: sumQuantities(meal.ingredients) } : null,
-      );
-    }
+    if (meal) setDraft(toDraft(meal));
   }, [meal]);
 
   const set = <K extends keyof MealDraft>(key: K, value: MealDraft[K]) =>
@@ -165,17 +158,27 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
     }));
 
   // ── Apports par portion ──────────────────────────────────
-  // Ajustés en direct selon le ratio entre les quantités actuelles et les
-  // quantités de référence (plat chargé ou dernier import JSON).
-  const liveNutrition = useMemo<Nutrition | null>(() => {
-    if (!nutritionBase) return null;
-    const { nutrition, totalQty } = nutritionBase;
-    const hasAnyValue = Object.values(nutrition).some((v) => v !== undefined);
-    if (!hasAnyValue) return null;
-    const currentQty = sumQuantities(draft.ingredients);
-    const ratio = totalQty > 0 ? currentQty / totalQty : 1;
-    return scaleNutrition(nutrition, ratio);
-  }, [nutritionBase, draft.ingredients]);
+  // Calculés en direct depuis les apports portés par chaque ingrédient
+  // (import JSON/IA ou saisie manuelle), ramenés à la quantité saisie.
+  const liveNutrition = useMemo(
+    () => computeMealNutrition(draft.ingredients, draft.servings),
+    [draft.ingredients, draft.servings],
+  );
+
+  /** Modifie un apport d'ingrédient (champ vidable) ; verrouille la quantité de référence. */
+  const setIngredientNutrition = (idx: number, key: NutritionKey, value: number | undefined) =>
+    setDraft((d) => ({
+      ...d,
+      ingredients: d.ingredients.map((i, k) => {
+        if (k !== idx) return i;
+        const next: IngredientNutrition = { ...(i.nutrition ?? {}) };
+        if (value === undefined) delete next[key];
+        else next[key] = value;
+        // Les apports sont définis pour la quantité au moment de la saisie.
+        if (next.quantity === undefined && i.quantity !== undefined) next.quantity = i.quantity;
+        return { ...i, nutrition: hasNutritionValues(next) ? next : undefined };
+      }),
+    }));
 
   // ── Import JSON ──────────────────────────────────────────
   const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,15 +188,21 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        const importedIngredients: DraftIngredient[] = (parsed.ingredients ?? []).map((i: any) => ({
-          id: String(i.id),
-          name: i.name,
-          quantity: Number.isFinite(Number(i.quantity)) ? Number(i.quantity) : undefined,
-          unit: i.unit,
-          aisle: i.aisle,
-          optional: i.optional ?? false,
-          notes: i.notes ?? '',
-        }));
+        const importedIngredients: DraftIngredient[] = (parsed.ingredients ?? []).map((i: any) => {
+          const quantity = Number.isFinite(Number(i.quantity)) ? Number(i.quantity) : undefined;
+          return {
+            id: String(i.id),
+            name: i.name,
+            quantity,
+            unit: i.unit,
+            aisle: i.aisle,
+            optional: i.optional ?? false,
+            notes: i.notes ?? '',
+            // Apports par ingrédient (renseignés par l'IA en arrière-plan,
+            // pour la quantité importée) — base du calcul des apports du plat.
+            nutrition: parseIngredientNutrition(i.nutrition, quantity),
+          };
+        });
         setDraft({
           id: parsed.id,
           name: parsed.name ?? '',
@@ -214,12 +223,6 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
             ingredients: s.ingredients ?? [],
           })),
         });
-        // La nutrition importée devient la nouvelle référence de mise à l'échelle.
-        setNutritionBase(
-          parsed.nutrition
-            ? { nutrition: parsed.nutrition as Nutrition, totalQty: sumQuantities(importedIngredients) }
-            : null,
-        );
         setError(null);
       } catch {
         setError('Fichier JSON invalide. Vérifiez le format.');
@@ -480,6 +483,54 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
                     )}
                   </Select>
                 </div>
+
+                {/* Apports de l'ingrédient (repliés par défaut) — base du calcul des apports du plat */}
+                {(() => {
+                  const refQty = ing.nutrition?.quantity ?? ing.quantity;
+                  return (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setOpenNutritionId(openNutritionId === ing.id ? null : ing.id)}
+                        className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400 hover:text-brand-600"
+                      >
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 transition-transform ${openNutritionId === ing.id ? '' : '-rotate-90'}`}
+                        />
+                        Apports{hasNutritionValues(ing.nutrition) ? ' · renseignés' : ''}
+                      </button>
+                      {openNutritionId === ing.id && (
+                        <div className="mt-1.5">
+                          <p className="mb-1 text-[10px] text-stone-400">
+                            {refQty !== undefined ? (
+                              <>
+                                Pour {refQty} {ing.unit} — macros en g. Les apports du plat suivent la quantité.
+                              </>
+                            ) : (
+                              <>Renseigne d'abord une quantité.</>
+                            )}
+                          </p>
+                          <div className="grid grid-cols-5 gap-1.5">
+                            {NUTRIENT_FIELDS.map(({ key, label }) => (
+                              <Input
+                                key={key}
+                                type="number"
+                                className="px-2 py-1.5 text-xs"
+                                placeholder={label}
+                                disabled={refQty === undefined}
+                                value={ing.nutrition?.[key] ?? ''}
+                                onChange={(e) => {
+                                  const v = e.target.value === '' ? undefined : Number(e.target.value);
+                                  setIngredientNutrition(idx, key, v !== undefined && Number.isFinite(v) ? v : undefined);
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="mt-2 flex items-center gap-2">
                   <label className="flex items-center gap-1.5 text-xs text-stone-500">
                     <input
