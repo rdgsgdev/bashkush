@@ -7,6 +7,7 @@ import { Field, Input, Textarea } from '../components/ui/FormControl';
 import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onboarding/Choice';
 import { useProfile, useSaveProfile, useUploadProfileImage } from '../api/profile';
 import { useAuthStore } from '../store/authStore';
+import { computeDailyTargets } from '../lib/nutrition';
 import type { ProfileDraft } from '../types/profile';
 import {
   computeAge,
@@ -106,6 +107,24 @@ export function ProfilePage() {
   const age = computeAge(draft.birthDate);
   const saving = saveProfile.isPending || uploadImage.isPending;
 
+  // Objectifs recalculés en direct à partir du brouillon (réactifs dès
+  // qu'une donnée change) — le serveur reste la valeur enregistrée.
+  // Fallback vers le profil seulement tant que le brouillon n'est pas
+  // initialisé (sinon un champ effacé serait remplacé par l'ancienne valeur).
+  const liveTargets = computeDailyTargets({
+    heightCm: draft.heightCm === undefined ? profile?.heightCm ?? null : draft.heightCm,
+    weightKg: draft.weightKg === undefined ? profile?.weightKg ?? null : draft.weightKg,
+    birthDate: draft.birthDate === undefined ? profile?.birthDate ?? null : draft.birthDate,
+    sex: draft.sex === undefined ? profile?.sex ?? null : draft.sex,
+    activityLevel:
+      draft.activityLevel === undefined ? profile?.activityLevel ?? null : draft.activityLevel,
+    goals: draft.goals ?? profile?.goals ?? [],
+  });
+  const targetsChanged =
+    liveTargets !== null &&
+    (liveTargets.dailyCalories !== profile?.dailyCalories ||
+      liveTargets.dailyProtein !== profile?.dailyProtein);
+
   return (
     <div className="flex flex-1 flex-col">
       <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
@@ -116,25 +135,32 @@ export function ProfilePage() {
           <h2 className="text-xs font-bold uppercase tracking-wide text-white/80">
             Objectifs quotidiens
           </h2>
-          {profile?.dailyCalories && profile?.dailyProtein ? (
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
-                <Flame className="h-7 w-7 shrink-0 text-orange-300" />
-                <div>
-                  <p className="text-xl font-bold leading-tight">
-                    {profile.dailyCalories.toLocaleString('fr-CA')}
-                  </p>
-                  <p className="text-xs text-white/80">kcal / jour</p>
+          {liveTargets ? (
+            <>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
+                  <Flame className="h-7 w-7 shrink-0 text-orange-300" />
+                  <div>
+                    <p className="text-xl font-bold leading-tight">
+                      {liveTargets.dailyCalories.toLocaleString('fr-CA')}
+                    </p>
+                    <p className="text-xs text-white/80">kcal / jour</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
+                  <Beef className="h-7 w-7 shrink-0 text-orange-300" />
+                  <div>
+                    <p className="text-xl font-bold leading-tight">{liveTargets.dailyProtein} g</p>
+                    <p className="text-xs text-white/80">protéines / jour</p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
-                <Beef className="h-7 w-7 shrink-0 text-orange-300" />
-                <div>
-                  <p className="text-xl font-bold leading-tight">{profile.dailyProtein} g</p>
-                  <p className="text-xs text-white/80">protéines / jour</p>
-                </div>
-              </div>
-            </div>
+              {targetsChanged && (
+                <p className="mt-2 text-xs font-semibold text-orange-200">
+                  Valeurs non enregistrées — appuie sur « Enregistrer » pour les conserver.
+                </p>
+              )}
+            </>
           ) : (
             <p className="mt-2 text-sm text-white/85">
               Renseigne ta taille, ton poids, ta date de naissance et ton niveau d’activité puis

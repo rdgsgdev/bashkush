@@ -35,7 +35,12 @@ export function useSaveProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: saveProfile,
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.profile }),
+    onSuccess: (data) => {
+      // La réponse du PUT contient les objectifs recalculés → cache mis à
+      // jour immédiatement (pas d'attente du refetch), puis invalidation.
+      qc.setQueryData(queryKeys.profile, data);
+      qc.invalidateQueries({ queryKey: queryKeys.profile });
+    },
   });
 }
 
