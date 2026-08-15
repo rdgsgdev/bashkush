@@ -50,6 +50,9 @@ export interface Profile {
   foodOther?: string | null;
   notes?: string | null;
   photoUrl?: string | null;
+  /** Objectifs quotidiens calculés par le backend (null si données insuffisantes). */
+  dailyCalories?: number | null; // kcal/jour
+  dailyProtein?: number | null; // g/jour
   onboardedAt?: string | null;
 }
 

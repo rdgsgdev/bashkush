@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Camera, Save } from 'lucide-react';
+import { Camera, Flame, Beef, Save } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { Button } from '../components/ui/Button';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
@@ -111,6 +111,40 @@ export function ProfilePage() {
       <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
 
       <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6">
+        {/* Objectifs quotidiens calculés */}
+        <section className="card mb-4 bg-brand-500 text-white">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-white/80">
+            Objectifs quotidiens
+          </h2>
+          {profile?.dailyCalories && profile?.dailyProtein ? (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
+                <Flame className="h-7 w-7 shrink-0 text-orange-300" />
+                <div>
+                  <p className="text-xl font-bold leading-tight">
+                    {profile.dailyCalories.toLocaleString('fr-CA')}
+                  </p>
+                  <p className="text-xs text-white/80">kcal / jour</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
+                <Beef className="h-7 w-7 shrink-0 text-orange-300" />
+                <div>
+                  <p className="text-xl font-bold leading-tight">{profile.dailyProtein} g</p>
+                  <p className="text-xs text-white/80">protéines / jour</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-white/85">
+              Renseigne ta taille, ton poids, ta date de naissance et ton niveau d’activité puis
+              enregistre pour obtenir tes objectifs caloriques et protéiques.
+            </p>
+          )}
+          <p className="mt-3 text-[11px] text-white/70">
+            Calculé selon ta taille, poids, âge, sexe, activité et objectifs (Mifflin-St Jeor).
+          </p>
+        </section>
 
       {/* Photo + identité */}
       <Section title="Identité">

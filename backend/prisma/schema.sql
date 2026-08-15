@@ -22,6 +22,8 @@ CREATE TABLE "profiles" (
     "notes" TEXT,
     "photo_url" TEXT,
     "image_path" TEXT,
+    "daily_calories" INTEGER,
+    "daily_protein" INTEGER,
     "onboarded_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
