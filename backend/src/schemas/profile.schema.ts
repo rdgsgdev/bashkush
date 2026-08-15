@@ -71,6 +71,11 @@ export const saveProfileSchema = z.object({
   foodChoices: foodChoicesEnum.optional(),
   foodOther: optionalText,
   notes: optionalText,
+  // Objectifs quotidiens saisis manuellement (absents → mode auto).
+  dailyCalories: z.number().int().min(800).max(15000).optional().nullable(),
+  dailyProtein: z.number().int().min(20).max(500).optional().nullable(),
+  // true → écrase les valeurs manuelles et recalcule depuis le profil.
+  syncTargets: z.boolean().optional(),
 });
 
 export type SaveProfileInput = z.infer<typeof saveProfileSchema>;

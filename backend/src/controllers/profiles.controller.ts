@@ -12,15 +12,12 @@ export const getProfile = asyncHandler(async (req: AuthedRequest, res: Response)
   const userId = req.authUser!.id;
   let profile = await prisma.profile.findUnique({ where: { userId } });
 
-  // Recalcule/persiste les objectifs quotidiens si nécessaire
-  // (première fois ou données modifiées hors PUT).
-  if (profile) {
+  // Backfill : calcule les objectifs s'ils n'ont jamais été calculés.
+  // (On ne touche jamais aux valeurs manuelles ni déjà calculées —
+  // le recalcul auto se fait au PUT.)
+  if (profile && !profile.targetsManual && (profile.dailyCalories === null || profile.dailyProtein === null)) {
     const targets = computeDailyTargets(profile);
-    if (
-      targets &&
-      (profile.dailyCalories !== targets.dailyCalories ||
-        profile.dailyProtein !== targets.dailyProtein)
-    ) {
+    if (targets) {
       profile = await prisma.profile.update({ where: { userId }, data: targets });
     }
   }
@@ -32,17 +29,44 @@ export const getProfile = asyncHandler(async (req: AuthedRequest, res: Response)
 export const saveProfile = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const userId = req.authUser!.id;
   const existing = await prisma.profile.findUnique({ where: { userId } });
-  const input = saveProfileSchema.parse(req.body);
+  const { syncTargets, dailyCalories, dailyProtein, ...rest } = saveProfileSchema.parse(req.body);
 
-  // Objectifs quotidiens recalculés sur les données fusionnées
-  // (le PUT peut être partiel → on repart des valeurs existantes).
-  const merged = { ...existing, ...input, userId } as unknown as Profile;
-  const targets = computeDailyTargets(merged);
-  const data = {
-    ...input,
-    dailyCalories: targets?.dailyCalories ?? null,
-    dailyProtein: targets?.dailyProtein ?? null,
-  };
+  // Objectifs quotidiens :
+  // - syncTargets → recalcul depuis les infos du profil (écrase le manuel)
+  // - valeurs fournies → saisie manuelle
+  // - mode manuel déjà actif → on conserve les valeurs existantes
+  // - sinon → recalcul automatique (mode auto)
+  const merged = { ...existing, ...rest, userId } as unknown as Profile;
+  let targets: { dailyCalories: number | null; dailyProtein: number | null; targetsManual: boolean };
+  if (syncTargets) {
+    const t = computeDailyTargets(merged);
+    targets = {
+      dailyCalories: t?.dailyCalories ?? null,
+      dailyProtein: t?.dailyProtein ?? null,
+      targetsManual: false,
+    };
+  } else if (dailyCalories !== undefined || dailyProtein !== undefined) {
+    targets = {
+      dailyCalories: dailyCalories ?? existing?.dailyCalories ?? null,
+      dailyProtein: dailyProtein ?? existing?.dailyProtein ?? null,
+      targetsManual: true,
+    };
+  } else if (existing?.targetsManual) {
+    targets = {
+      dailyCalories: existing.dailyCalories,
+      dailyProtein: existing.dailyProtein,
+      targetsManual: true,
+    };
+  } else {
+    const t = computeDailyTargets(merged);
+    targets = {
+      dailyCalories: t?.dailyCalories ?? null,
+      dailyProtein: t?.dailyProtein ?? null,
+      targetsManual: false,
+    };
+  }
+
+  const data = { ...rest, ...targets };
 
   const profile = await prisma.profile.upsert({
     where: { userId },

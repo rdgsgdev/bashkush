@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Camera, Flame, Beef, Save } from 'lucide-react';
+import { Camera, Flame, Beef, RefreshCw, Save } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { Header } from '../components/layout/Header';
 import { Button } from '../components/ui/Button';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
@@ -8,7 +9,7 @@ import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onbo
 import { useProfile, useSaveProfile, useUploadProfileImage } from '../api/profile';
 import { useAuthStore } from '../store/authStore';
 import { computeDailyTargets } from '../lib/nutrition';
-import type { ProfileDraft } from '../types/profile';
+import type { Profile, ProfileDraft } from '../types/profile';
 import {
   computeAge,
   SEX_LABELS,
@@ -68,6 +69,8 @@ export function ProfilePage() {
       foodChoices: profile.foodChoices ?? [],
       foodOther: profile.foodOther ?? '',
       notes: profile.notes ?? '',
+      dailyCalories: profile.dailyCalories ?? null,
+      dailyProtein: profile.dailyProtein ?? null,
     });
     setInitialized(true);
   }, [profile, initialized]);
@@ -77,20 +80,51 @@ export function ProfilePage() {
     setSaved(false);
   };
 
-  const handleSave = () => {
-    setError(null);
-    // Chaînes vides → null pour ne pas stocker des "".
-    const cleaned = Object.fromEntries(
+  /** Chaînes vides → null pour ne pas stocker des "". */
+  const cleanDraft = (): ProfileDraft =>
+    Object.fromEntries(
       Object.entries(draft).map(([k, v]) => [k, typeof v === 'string' && v.trim() === '' ? null : v]),
     ) as ProfileDraft;
-    saveProfile.mutate(cleaned, {
-      onSuccess: () => setSaved(true),
-      onError: (err) =>
-        setError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-            'Impossible d’enregistrer le profil.',
-        ),
-    });
+
+  const onSaveSuccess = (savedProfile: Profile) => {
+    setSaved(true);
+    // Resynchronise les objectifs du brouillon avec la réponse
+    // (recalcul auto côté serveur après un changement de poids/objectif…).
+    setDraft((d) => ({
+      ...d,
+      dailyCalories: savedProfile.dailyCalories ?? null,
+      dailyProtein: savedProfile.dailyProtein ?? null,
+    }));
+  };
+
+  const onSaveError = (err: unknown) =>
+    setError(
+      (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Impossible d’enregistrer le profil.',
+    );
+
+  const handleSave = () => {
+    setError(null);
+    const cleaned = cleanDraft();
+    // On n'envoie les objectifs que s'ils ont été modifiés à la main
+    // (sinon le serveur reste en mode calcul automatique).
+    const targetsTouched =
+      draft.dailyCalories !== (profile?.dailyCalories ?? null) ||
+      draft.dailyProtein !== (profile?.dailyProtein ?? null);
+    if (!targetsTouched) {
+      delete cleaned.dailyCalories;
+      delete cleaned.dailyProtein;
+    }
+    saveProfile.mutate(cleaned, { onSuccess: onSaveSuccess, onError: onSaveError });
+  };
+
+  /** Écrase les valeurs manuelles : recalcul depuis les infos du profil. */
+  const handleSync = () => {
+    setError(null);
+    saveProfile.mutate(
+      { ...cleanDraft(), syncTargets: true },
+      { onSuccess: onSaveSuccess, onError: onSaveError },
+    );
   };
 
   const handlePhoto = (file: File) => {
@@ -120,44 +154,72 @@ export function ProfilePage() {
       draft.activityLevel === undefined ? profile?.activityLevel ?? null : draft.activityLevel,
     goals: draft.goals ?? profile?.goals ?? [],
   });
-  const targetsChanged =
-    liveTargets !== null &&
-    (liveTargets.dailyCalories !== profile?.dailyCalories ||
-      liveTargets.dailyProtein !== profile?.dailyProtein);
 
   return (
     <div className="flex flex-1 flex-col">
       <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
 
       <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6">
-        {/* Objectifs quotidiens calculés */}
+        {/* Objectifs quotidiens — éditables, icône ↻ pour recalculer */}
         <section className="card mb-4 bg-brand-500 text-white">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-white/80">
-            Objectifs quotidiens
-          </h2>
-          {liveTargets ? (
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wide text-white/80">
+              Objectifs quotidiens
+            </h2>
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={saving}
+              title="Recalculer selon mes informations"
+              aria-label="Recalculer les objectifs"
+              className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw className={cn('h-4 w-4', saveProfile.isPending && 'animate-spin')} />
+            </button>
+          </div>
+          {liveTargets || draft.dailyCalories || draft.dailyProtein ? (
             <>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
-                  <Flame className="h-7 w-7 shrink-0 text-orange-300" />
-                  <div>
-                    <p className="text-xl font-bold leading-tight">
-                      {liveTargets.dailyCalories.toLocaleString('fr-CA')}
-                    </p>
-                    <p className="text-xs text-white/80">kcal / jour</p>
+                <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5">
+                  <Flame className="h-6 w-6 shrink-0 text-orange-300" />
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={draft.dailyCalories ?? ''}
+                      onChange={(e) =>
+                        set({ dailyCalories: e.target.value === '' ? null : Number(e.target.value) })
+                      }
+                      placeholder={liveTargets ? String(liveTargets.dailyCalories) : '—'}
+                      className="!border-transparent !bg-white/10 text-base !font-bold text-white placeholder:text-white/40"
+                    />
+                    <p className="mt-0.5 text-xs text-white/80">kcal / jour</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3">
-                  <Beef className="h-7 w-7 shrink-0 text-orange-300" />
-                  <div>
-                    <p className="text-xl font-bold leading-tight">{liveTargets.dailyProtein} g</p>
-                    <p className="text-xs text-white/80">protéines / jour</p>
+                <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5">
+                  <Beef className="h-6 w-6 shrink-0 text-orange-300" />
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={draft.dailyProtein ?? ''}
+                      onChange={(e) =>
+                        set({ dailyProtein: e.target.value === '' ? null : Number(e.target.value) })
+                      }
+                      placeholder={liveTargets ? String(liveTargets.dailyProtein) : '—'}
+                      className="!border-transparent !bg-white/10 text-base !font-bold text-white placeholder:text-white/40"
+                    />
+                    <p className="mt-0.5 text-xs text-white/80">g protéines / jour</p>
                   </div>
                 </div>
               </div>
-              {targetsChanged && (
+              {profile?.targetsManual ? (
                 <p className="mt-2 text-xs font-semibold text-orange-200">
-                  Valeurs non enregistrées — appuie sur « Enregistrer » pour les conserver.
+                  Valeurs personnalisées — ↻ pour recalculer selon tes informations.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-white/70">
+                  Valeurs calculées automatiquement — modifiables (↻ pour revenir au calcul).
                 </p>
               )}
             </>
@@ -168,7 +230,7 @@ export function ProfilePage() {
             </p>
           )}
           <p className="mt-3 text-[11px] text-white/70">
-            Calculé selon ta taille, poids, âge, sexe, activité et objectifs (Mifflin-St Jeor).
+            Calcul selon ta taille, poids, âge, sexe, activité et objectifs (Mifflin-St Jeor).
           </p>
         </section>
 

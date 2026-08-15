@@ -13,7 +13,9 @@ export async function getProfile(): Promise<ProfileResponse> {
   return data;
 }
 
-export async function saveProfile(draft: ProfileDraft): Promise<Profile> {
+export async function saveProfile(
+  draft: ProfileDraft & { syncTargets?: boolean },
+): Promise<Profile> {
   const { data } = await api.put<Profile>('/profile', draft);
   return data;
 }

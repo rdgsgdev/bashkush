@@ -24,6 +24,7 @@ CREATE TABLE "profiles" (
     "image_path" TEXT,
     "daily_calories" INTEGER,
     "daily_protein" INTEGER,
+    "targets_manual" BOOLEAN NOT NULL DEFAULT false,
     "onboarded_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,

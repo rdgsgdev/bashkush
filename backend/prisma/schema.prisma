@@ -42,9 +42,11 @@ model Profile {
   notes       String?
   photoUrl    String?  @map("photo_url")
   imagePath   String?  @map("image_path")
-  // Objectifs quotidiens calculés (Mifflin-St Jeor + objectif) — null si données insuffisantes.
+  // Objectifs quotidiens — calculés (Mifflin-St Jeor + objectif) ou saisis
+  // manuellement (targetsManual). null si données insuffisantes.
   dailyCalories Int?   @map("daily_calories") // kcal/jour
   dailyProtein  Int?   @map("daily_protein")  // g de protéines/jour
+  targetsManual Boolean @default(false) @map("targets_manual") // true = saisis à la main (sync → recalcul)
   onboardedAt DateTime? @map("onboarded_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
