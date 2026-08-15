@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Camera, Save } from 'lucide-react';
+import { Header } from '../components/layout/Header';
 import { Button } from '../components/ui/Button';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
 import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onboarding/Choice';
@@ -106,8 +107,10 @@ export function ProfilePage() {
   const saving = saveProfile.isPending || uploadImage.isPending;
 
   return (
-    <div className="app-container flex-1 overflow-y-auto bg-stone-50 px-4 py-5">
-      <h1 className="mb-4 text-xl font-bold text-stone-800">Mon profil</h1>
+    <div className="flex flex-1 flex-col">
+      <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
+
+      <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6">
 
       {/* Photo + identité */}
       <Section title="Identité">
@@ -338,6 +341,7 @@ export function ProfilePage() {
           Enregistrer
         </Button>
       </div>
+      </main>
     </div>
   );
 }
