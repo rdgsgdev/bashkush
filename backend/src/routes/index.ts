@@ -5,6 +5,7 @@ import groceryRoutes from './grocery.routes';
 import aislesRoutes from './aisles.routes';
 import profileRoutes from './profile.routes';
 import familyRoutes from './family.routes';
+import aiRoutes from './ai.routes';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -20,5 +21,6 @@ router.use('/grocery-items', groceryRoutes);
 router.use('/grocery-aisles', aislesRoutes);
 router.use('/profile', profileRoutes);
 router.use('/family', familyRoutes);
+router.use('/ai', aiRoutes);
 
 export default router;

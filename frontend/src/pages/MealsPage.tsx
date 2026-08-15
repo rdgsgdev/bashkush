@@ -4,6 +4,8 @@ import { Header } from '../components/layout/Header';
 import { MealCard } from '../components/meals/MealCard';
 import { MealEditionModal } from '../components/modals/MealEditionModal';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
+import { MealAddChoiceModal } from '../components/modals/MealAddChoiceModal';
+import { MealAIGenerationModal } from '../components/modals/MealAIGenerationModal';
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useMeals } from '../api/meals';
@@ -12,13 +14,21 @@ export function MealsPage() {
   const [params, setParams] = useSearchParams();
   const { data: meals, isLoading, isError } = useMeals();
 
-  // Modale d'édition (création ou modification).
+  // Modale d'ajout : ?meal=new → choix (IA ou manuel).
   const mealParam = params.get('meal');
-  const isCreating = mealParam === 'new';
-  const editingMeal = meals?.find((m) => m.id === mealParam) ?? null;
-  const modalOpen = Boolean(mealParam);
+  const isChoosing = mealParam === 'new';
+  const isCreatingManually = mealParam === 'manual';
+  const isGeneratingWithAI = mealParam === 'ai';
+  const editingMeal =
+    !isChoosing && !isCreatingManually && !isGeneratingWithAI
+      ? (meals?.find((m) => m.id === mealParam) ?? null)
+      : null;
   const closeModal = () => {
     params.delete('meal');
+    setParams(params, { replace: true });
+  };
+  const chooseAddMode = (mode: 'ai' | 'manual') => {
+    params.set('meal', mode);
     setParams(params, { replace: true });
   };
 
@@ -85,7 +95,18 @@ export function MealsPage() {
         onEditMeal={editMeal}
       />
 
-      <MealEditionModal meal={isCreating ? null : editingMeal} open={modalOpen} onClose={closeModal} />
+      {/* ?meal=new → choix du mode d'ajout (IA ou manuel). */}
+      <MealAddChoiceModal open={isChoosing} onClose={closeModal} onChoose={chooseAddMode} />
+
+      {/* ?meal=ai → génération d'un plat par IA. */}
+      <MealAIGenerationModal open={isGeneratingWithAI} onClose={closeModal} />
+
+      {/* ?meal=manual (création) ou ?meal=<id> (modification). */}
+      <MealEditionModal
+        meal={isCreatingManually ? null : editingMeal}
+        open={isCreatingManually || Boolean(editingMeal)}
+        onClose={closeModal}
+      />
     </div>
   );
 }

@@ -14,6 +14,11 @@ const schema = z.object({
 
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
+
+  // ── Génération de plats par IA (Perplexity) ───────────────
+  // Clé absente → l'endpoint /api/ai/generate-meal répond 503.
+  PERPLEXITY_API_KEY: z.string().default(''),
+  PERPLEXITY_MODEL: z.string().default('sonar'),
 });
 
 const parsed = schema.safeParse(process.env);

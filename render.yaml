@@ -34,6 +34,11 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      # Clé API Perplexity (génération de plats par IA) — à définir manuellement.
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      - key: PERPLEXITY_MODEL
+        value: sonar
 
   - type: web
     name: bashkush-web

@@ -4,6 +4,7 @@ import { asyncHandler, HttpError } from '../middleware/error';
 import { AuthedRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
 import { ensureFamilyId } from '../lib/family';
+import { computeDailyTargets } from '../lib/nutrition';
 import { addFamilyMemberSchema } from '../schemas/family.schema';
 
 /** Vue renvoyée au frontend pour un membre de la famille. */
@@ -23,6 +24,22 @@ export interface FamilyInvitationView {
   id: string;
   inviterEmail: string | null;
   inviterName: string | null;
+}
+
+/**
+ * Vue « profil » d'un membre de la famille (moi inclus), utilisée
+ * par la modale de génération IA pour la sélection des membres.
+ */
+export interface FamilyMemberProfileView {
+  userId: string;
+  fullName: string | null;
+  photoUrl: string | null;
+  isSelf: boolean;
+  dailyCalories: number | null;
+  dailyProtein: number | null;
+  goals: string[];
+  allergies: string | null;
+  foodChoices: string[];
 }
 
 /** Cherche un utilisateur Supabase par courriel (pagination simple). */
@@ -103,6 +120,43 @@ export const getFamily = asyncHandler(async (req: AuthedRequest, res: Response) 
 
   res.json(members);
 });
+
+/**
+ * Liste les profils de ma famille (moi inclus) avec le résumé
+ * nutritionnel utilisé par la génération IA de plats.
+ */
+export const listFamilyMemberProfiles = asyncHandler(
+  async (req: AuthedRequest, res: Response) => {
+    const userId = req.authUser!.id;
+    const myEmail = req.authUser!.email?.toLowerCase() ?? null;
+    if (!myEmail) throw new HttpError(400, 'Courriel manquant sur le compte connecté');
+
+    const familyId = await ensureFamilyId(userId, myEmail);
+
+    const profiles = await prisma.profile.findMany({
+      where: { familyId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const views: FamilyMemberProfileView[] = profiles.map((p) => {
+      // Objectifs : valeurs manuelles si présentes, sinon calcul auto.
+      const computed = p.targetsManual ? null : computeDailyTargets(p);
+      return {
+        userId: p.userId,
+        fullName: p.fullName,
+        photoUrl: p.photoUrl,
+        isSelf: p.userId === userId,
+        dailyCalories: computed?.dailyCalories ?? p.dailyCalories,
+        dailyProtein: computed?.dailyProtein ?? p.dailyProtein,
+        goals: p.goals,
+        allergies: p.allergies,
+        foodChoices: p.foodChoices,
+      };
+    });
+
+    res.json(views);
+  },
+);
 
 /** Ajoute un membre à ma famille par courriel (pending tant qu'il n'a pas rejoint). */
 export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Response) => {
