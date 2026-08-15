@@ -6,6 +6,7 @@ import { Header } from '../components/layout/Header';
 import { Button } from '../components/ui/Button';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
 import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onboarding/Choice';
+import { FamilySection } from '../components/profile/FamilySection';
 import { useProfile, useSaveProfile, useUploadProfileImage } from '../api/profile';
 import { useAuthStore } from '../store/authStore';
 import { computeDailyTargets } from '../lib/nutrition';
@@ -52,7 +53,8 @@ export function ProfilePage() {
     setDraft({
       fullName: profile.fullName ?? '',
       birthDate: profile.birthDate?.slice(0, 10) ?? '',
-      sex: profile.sex ?? null,
+      // Les anciennes valeurs (autre / non_precise) ne sont plus proposées → null.
+      sex: profile.sex === 'homme' || profile.sex === 'femme' ? profile.sex : null,
       heightCm: profile.heightCm ?? null,
       weightKg: profile.weightKg ?? null,
       activityLevel: profile.activityLevel ?? null,
@@ -300,6 +302,13 @@ export function ProfilePage() {
           onChange={(v) => set({ sex: v as ProfileDraft['sex'] })}
         />
       </Section>
+
+      {/* Ma famille — vue / ajout par courriel / retrait */}
+      <div className="mt-4">
+        <Section title="Ma famille">
+          <FamilySection />
+        </Section>
+      </div>
 
       {/* Mesures */}
       <div className="mt-4">

@@ -7,4 +7,5 @@ export const queryKeys = {
   grocery: (archived: boolean) => ['grocery', { archived }] as const,
   aisles: ['aisles'] as const,
   profile: ['profile'] as const,
+  family: ['family'] as const,
 };

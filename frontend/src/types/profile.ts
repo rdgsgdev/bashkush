@@ -1,6 +1,6 @@
 // ── Profil utilisateur (miroir du modèle Prisma Profile) ─────
 
-export type Sex = 'homme' | 'femme' | 'autre' | 'non_precise';
+export type Sex = 'homme' | 'femme';
 export type ActivityLevel =
   | 'sedentaire'
   | 'legerement_actif'
@@ -65,8 +65,6 @@ export type ProfileDraft = Partial<Omit<Profile, 'userId' | 'onboardedAt' | 'pho
 export const SEX_LABELS: Record<Sex, string> = {
   homme: 'Homme',
   femme: 'Femme',
-  autre: 'Autre',
-  non_precise: 'Préfère ne pas dire',
 };
 
 export const ACTIVITY_LEVEL_LABELS: Record<ActivityLevel, string> = {

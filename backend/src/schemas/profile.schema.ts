@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // ── Énumérations du profil ─────────────────────────────────────
 
-const sexEnum = z.enum(['homme', 'femme', 'autre', 'non_precise']);
+const sexEnum = z.enum(['homme', 'femme']);
 
 const activityLevelEnum = z.enum([
   'sedentaire',

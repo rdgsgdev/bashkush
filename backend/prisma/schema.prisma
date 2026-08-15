@@ -23,7 +23,7 @@ model Profile {
   userId      String    @id @map("user_id")
   fullName    String?   @map("full_name")
   birthDate   DateTime? @map("birth_date")
-  sex         String? // homme | femme | autre | non_precise
+  sex         String? // homme | femme (anciennes valeurs possible en base : autre | non_precise)
   heightCm    Float?    @map("height_cm")
   weightKg    Float?    @map("weight_kg")
   activityLevel String? @map("activity_level") // sedentaire | legerement_actif | moderement_actif | tres_actif | extremement_actif
@@ -51,7 +51,32 @@ model Profile {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  ownedFamilyMembers FamilyMember[] @relation("FamilyOwner")
+  familyMemberships   FamilyMember[] @relation("FamilyMember")
+
   @@map("profiles")
+}
+
+// ── Famille ──────────────────────────────────────────────────
+// Lien dirigé : ownerUserId invite memberEmail. Le lien devient
+// "accepted" dès que la personne dispose d'un compte (userId connu).
+// L'affichage est symétrique (chaque côté voit l'autre via /family).
+
+model FamilyMember {
+  id           String   @id @default(uuid())
+  ownerUserId  String   @map("owner_user_id") // celui qui invite
+  memberEmail  String   @map("member_email") // courriel invité (minuscules)
+  memberUserId String?  @map("member_user_id") // rempli quand la personne a un compte
+  status       String   @default("pending") // pending | accepted
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  owner  Profile @relation("FamilyOwner", fields: [ownerUserId], references: [userId], onDelete: Cascade)
+  member Profile? @relation("FamilyMember", fields: [memberUserId], references: [userId], onDelete: SetNull)
+
+  @@unique([ownerUserId, memberEmail])
+  @@index([memberEmail])
+  @@map("family_members")
 }
 
 // ── Plats ────────────────────────────────────────────────────
