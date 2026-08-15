@@ -5,6 +5,7 @@ Application web **mobile-first** de **création et planification de plats** avec
 - 🍽️ Créez vos plats (manuellement ou par **import JSON**), avec photo, ingrédients, étapes et infos nutritionnelles.
 - 📅 **Planifiez** vos repas sur un calendrier (plages de dates, portions, statut).
 - 🛒 La **liste de courses** se génère automatiquement à partir du planning, **regroupée par rayons**, agrégée et éditable.
+- 👤 **Onboarding** à la première connexion (objectifs, activité, santé, alimentation…) puis **page profil** modifiable avec photo.
 
 > 100 % en français · connexion **Google** · pensé mobile d'abord.
 

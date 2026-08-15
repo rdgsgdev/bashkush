@@ -1,4 +1,35 @@
 -- CreateTable
+CREATE TABLE "profiles" (
+    "user_id" TEXT NOT NULL,
+    "full_name" TEXT,
+    "birth_date" TIMESTAMP(3),
+    "sex" TEXT,
+    "height_cm" DOUBLE PRECISION,
+    "weight_kg" DOUBLE PRECISION,
+    "activity_level" TEXT,
+    "weekly_activity" TEXT,
+    "fitness_level" TEXT,
+    "goals" TEXT[],
+    "goal_other" TEXT,
+    "medical_conditions" TEXT[],
+    "allergies" TEXT,
+    "medications" TEXT,
+    "medical_other" TEXT,
+    "meal_frequency" TEXT,
+    "meal_frequency_other" TEXT,
+    "food_choices" TEXT[],
+    "food_other" TEXT,
+    "notes" TEXT,
+    "photo_url" TEXT,
+    "image_path" TEXT,
+    "onboarded_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "profiles_pkey" PRIMARY KEY ("user_id")
+);
+
+-- CreateTable
 CREATE TABLE "meals" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,

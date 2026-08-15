@@ -166,6 +166,13 @@ Préfixe : `/api`. Toutes les réponses en JSON.
 | POST | `/grocery-items/unarchive` | `{ids?}` |
 | GET/POST/PUT/DELETE | `/grocery-aisles` | Gestion des rayons |
 
+### Profil (`/api/profile`)
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/profile` | Profil de l'utilisateur connecté (`{ onboarded: false }` s'il n'existe pas) |
+| PUT | `/profile` | Crée/met à jour le profil (1er enregistrement = fin d'onboarding) |
+| POST | `/profile/image` | Photo de profil (multipart `image`) → Storage |
+
 ---
 
 ## 7. Déploiement sur Render

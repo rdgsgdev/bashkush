@@ -15,6 +15,40 @@ datasource db {
   directUrl = env("DIRECT_URL")     // connexion directe (db push / migrations)
 }
 
+// ── Profil utilisateur ───────────────────────────────────────
+// 1 profil par utilisateur Supabase Auth (userId = auth.users.id).
+// onboardedAt null → onboarding à faire à la prochaine connexion.
+
+model Profile {
+  userId      String    @id @map("user_id")
+  fullName    String?   @map("full_name")
+  birthDate   DateTime? @map("birth_date")
+  sex         String? // homme | femme | autre | non_precise
+  heightCm    Float?    @map("height_cm")
+  weightKg    Float?    @map("weight_kg")
+  activityLevel String? @map("activity_level") // sedentaire | legerement_actif | moderement_actif | tres_actif | extremement_actif
+  weeklyActivity String? @map("weekly_activity") // moins_1h | 1_3h | 3_5h | 5_7h | plus_7h
+  fitnessLevel String? @map("fitness_level") // debutant | intermediaire | avance
+  goals       String[] // perdre_poids | maintenir_poids | prendre_poids | masse_musculaire | condition_physique | autre
+  goalOther   String?   @map("goal_other")
+  medicalConditions String[] @map("medical_conditions") // diabete | hypertension | cholesterol | allergies | autre
+  allergies   String?
+  medications String?
+  medicalOther String? @map("medical_other")
+  mealFrequency String? @map("meal_frequency") // 3_repas | 4_6_repas | jeune_intermittent | autre
+  mealFrequencyOther String? @map("meal_frequency_other")
+  foodChoices String[] @map("food_choices") // fruits | legumes | cereales_completes | proteines_maigres | produits_laitiers | noix_graines | legumineuses | autre
+  foodOther   String?  @map("food_other")
+  notes       String?
+  photoUrl    String?  @map("photo_url")
+  imagePath   String?  @map("image_path")
+  onboardedAt DateTime? @map("onboarded_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("profiles")
+}
+
 // ── Plats ────────────────────────────────────────────────────
 
 model Meal {

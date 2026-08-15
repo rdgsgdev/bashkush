@@ -3,6 +3,7 @@ import mealsRoutes from './meals.routes';
 import mealPlansRoutes from './mealPlans.routes';
 import groceryRoutes from './grocery.routes';
 import aislesRoutes from './aisles.routes';
+import profileRoutes from './profile.routes';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -16,5 +17,6 @@ router.use('/meals', mealsRoutes);
 router.use('/meal-plans', mealPlansRoutes);
 router.use('/grocery-items', groceryRoutes);
 router.use('/grocery-aisles', aislesRoutes);
+router.use('/profile', profileRoutes);
 
 export default router;

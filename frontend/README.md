@@ -74,9 +74,10 @@ src/
 │   ├── calendar/     Calendar (grille mensuelle + pastilles)
 │   ├── grocery/      GroceryItemRow, GroceryItemModal
 │   ├── modals/       Modal (bottom-sheet), MealEditionModal, MealPlanningModal
+│   ├── onboarding/   SingleChoice / MultiChoice (cartes & chips de choix)
 │   └── ui/           Button, Feedback, FormControl, NumberStepper
 ├── lib/              utils (dates, formatage), options (enums), plans (helpers), client Supabase (auth)
-├── pages/            LoginPage, HomePage, MealsPage, CalendarPage, GroceryListPage
+├── pages/            LoginPage, OnboardingPage, ProfilePage, HomePage, MealsPage, CalendarPage, GroceryListPage
 ├── store/            uiStore (menu burger), authStore (session Supabase)
 ├── types/            Types partagés + libellés FR
 ├── router.tsx        Routes React Router
