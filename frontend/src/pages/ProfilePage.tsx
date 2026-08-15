@@ -283,15 +283,18 @@ export function ProfilePage() {
             <p className="truncate text-xs text-stone-400">{user?.email}</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Date de naissance">
+        {/* Empilés sur mobile : l'input date iOS déborde de sa cellule de grille
+            et chevauche le champ voisin. min-w-0 autorise aussi le rétrécissement
+            des cellules sur les écrans plus larges. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Date de naissance" className="min-w-0">
             <Input
               type="date"
               value={draft.birthDate ?? ''}
               onChange={(e) => set({ birthDate: e.target.value })}
             />
           </Field>
-          <Field label="Âge">
+          <Field label="Âge" className="min-w-0">
             <Input value={age !== null ? `${age} ans` : ''} readOnly placeholder="—" />
           </Field>
         </div>
