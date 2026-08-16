@@ -110,7 +110,7 @@ const mealJsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'quantity', 'unit', 'aisle', 'optional', 'notes'],
+        required: ['name', 'quantity', 'unit', 'aisle', 'optional', 'notes', 'nutrition'],
         properties: {
           name: { type: 'string', description: 'Nom de l’ingrédient en français' },
           quantity: { type: 'number', description: 'Quantité totale pour toutes les portions' },
@@ -118,6 +118,19 @@ const mealJsonSchema = {
           aisle: { type: 'string', enum: [...AISLES], description: 'Rayon d’épicerie' },
           optional: { type: 'boolean' },
           notes: { type: 'string', description: 'Précision (peut être vide)' },
+          nutrition: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
+            description: 'Apports TOTAUX de cet ingrédient pour la quantité indiquée (toutes portions)',
+            properties: {
+              calories: { type: 'number', description: 'kcal totaux de l’ingrédient' },
+              protein: { type: 'number', description: 'grammes de protéines totaux' },
+              carbs: { type: 'number', description: 'grammes de glucides totaux' },
+              fat: { type: 'number', description: 'grammes de lipides totaux' },
+              fiber: { type: 'number', description: 'grammes de fibres totaux' },
+            },
+          },
         },
       },
     },
@@ -166,6 +179,17 @@ const aiMealResponseSchema = z.object({
         aisle: z.string().trim().min(1).max(60),
         optional: z.boolean(),
         notes: z.string().max(300),
+        // Apports totaux de l'ingrédient pour sa quantité (optionnel :
+        // tolérant si l'IA omet, bien que le schéma strict les exige).
+        nutrition: z
+          .object({
+            calories: z.number().nonnegative(),
+            protein: z.number().nonnegative(),
+            carbs: z.number().nonnegative(),
+            fat: z.number().nonnegative(),
+            fiber: z.number().nonnegative(),
+          })
+          .optional(),
       }),
     )
     .min(1),
@@ -233,6 +257,7 @@ Règles impératives :
 - Réponds UNIQUEMENT avec un objet JSON conforme au schéma fourni, sans texte autour.
 - Toutes les quantités d'ingrédients sont pour le nombre TOTAL de portions demandé.
 - Les apports nutritionnels (nutrition) sont PAR PORTION, avec des valeurs réalistes et cohérentes avec les ingrédients.
+- Pour CHAQUE ingrédient, renseigne ses apports TOTAUX (nutrition de l'ingrédient) pour la quantité indiquée : la somme des apports de tous les ingrédients, divisée par le nombre de portions, doit correspondre aux apports par portion du plat.
 - Les temps sont en minutes ; totalTime = prepTime + cookTime.
 - Les unités doivent être choisies parmi : ${UNITS.join(', ')}.
 - Le rayon (aisle) de chaque ingrédient doit être choisi parmi : ${AISLES.join(', ')}.
@@ -289,6 +314,9 @@ function normalizeMeal(ai: z.infer<typeof aiMealResponseSchema>, servings: numbe
       aisle: ing.aisle,
       optional: ing.optional,
       notes: ing.notes.trim() || null,
+      // Apports de l'ingrédient pour sa quantité — sert au recalcul
+      // des apports par portion du plat quand les quantités évoluent.
+      nutrition: ing.nutrition ? { ...ing.nutrition, quantity: ing.quantity } : undefined,
     };
   });
 

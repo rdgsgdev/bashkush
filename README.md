@@ -134,6 +134,8 @@ Les plats peuvent être générés par une IA externe (ChatGPT, etc.) puis impor
 
 Lors de l'**ajout manuel** d'un ingrédient (nom + quantité + unité renseignés), le backend interroge **Sonar** (Perplexity AI) et remplit automatiquement les apports de l'ingrédient — les champs restent modifiables à la main. Modifier le **nom**, la **quantité** ou l'**unité** re-questionne l'IA (après un délai de frappe) ; changer le **rayon** ou les notes n'a aucun effet. Requête : `POST /api/ai/ingredient-nutrition` `{ name, quantity, unit }`.
 
+> 💡 La **génération de plat par IA** (« Générer avec IA ») renseigne elle aussi les apports de chaque ingrédient en arrière-plan — les apports par portion du plat en découlent et suivent les quantités à l'édition.
+
 > ⚙️ Configuration : renseignez `PERPLEXITY_API_KEY` (et éventuellement `PERPLEXITY_MODEL`, défaut `sonar`) dans `backend/.env` — voir `.env.example`. Sans clé, la complétion échoue silencieusement et les champs restent saisissables manuellement.
 
 ---
