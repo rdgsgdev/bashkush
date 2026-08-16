@@ -106,7 +106,11 @@ export function useToggleFavorite() {
     onError: (_e, _id, ctx) => {
       if (ctx?.prev) qc.setQueryData(queryKeys.meals, ctx.prev);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.meals }),
+    // Fire-and-forget : en offline, attendre l'invalidation (refetch lents)
+    // bloquerait la mutation (voir src/api/grocery.ts).
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.meals });
+    },
   });
 }
 

@@ -172,10 +172,11 @@ export async function flushQueue(): Promise<void> {
 
 /**
  * Exécute une requête « queueable » :
- * - serveur connu injoignable ('offline' / 'server-down') → mise en file
- *   immédiate + réponse synthétique (les updates optimistes restent en place) ;
- * - statut indéterminé ('checking') ou en ligne → vraie requête, avec
- *   repli sur la file en cas d'erreur réseau (timeout, serveur en veille) ;
+ * - statut autre que 'online' (hors ligne, serveur en veille, sonde de
+ *   démarrage en cours) → mise en file immédiate + réponse synthétique
+ *   (les updates optimistes restent en place, aucun temps d'attente) ;
+ * - en ligne → vraie requête, avec repli sur la file en cas d'erreur réseau
+ *   (timeout, serveur en veille) ;
  * - erreur HTTP réelle (4xx/5xx) → remontée normalement aux hooks.
  */
 export async function runOfflineAware<T>(opts: {
@@ -190,7 +191,7 @@ export async function runOfflineAware<T>(opts: {
   request: () => Promise<T>;
 }): Promise<T> {
   const { status } = connectionState();
-  if (status === 'offline' || status === 'server-down') {
+  if (status !== 'online') {
     await enqueue({
       method: opts.method,
       url: opts.url,

@@ -263,7 +263,11 @@ export function useToggleCheck() {
     onError: (_e, _id, ctx) => {
       if (ctx?.snap) restoreCaches(qc, ctx.snap);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    // Fire-and-forget : en offline, l'invalidation déclenche des refetch qui
+    // échouent lentement — les attendre bloquerait la mutation (spinner).
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
   });
 }
 
@@ -300,7 +304,9 @@ export function useCreateGroceryItem() {
     onError: (_e, _input, ctx) => {
       if (ctx?.snap) restoreCaches(qc, ctx.snap);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
   });
 }
 
@@ -320,7 +326,9 @@ export function useUpdateGroceryItem() {
     onError: (_e, _v, ctx) => {
       if (ctx?.snap) restoreCaches(qc, ctx.snap);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
   });
 }
 
@@ -337,7 +345,9 @@ export function useDeleteGroceryItem() {
     onError: (_e, _id, ctx) => {
       if (ctx?.snap) restoreCaches(qc, ctx.snap);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
   });
 }
 
@@ -351,7 +361,9 @@ export function useArchiveItems() {
     onSuccess: (movedIds, { mode }) => {
       if (movedIds.length > 0) moveItems(qc, movedIds, true, mode === 'all');
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
   });
 }
 
@@ -362,6 +374,8 @@ export function useUnarchiveItems() {
     onSuccess: (movedIds) => {
       if (movedIds.length > 0) moveItems(qc, movedIds, false);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
   });
 }

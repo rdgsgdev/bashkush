@@ -60,8 +60,11 @@ export function useSaveProfile() {
     onSuccess: (data) => {
       // La réponse du PUT contient les objectifs recalculés → cache mis à
       // jour immédiatement (pas d'attente du refetch), puis invalidation.
+      // Hors ligne : réponse synthétique = brouillon fusionné.
       qc.setQueryData(queryKeys.profile, data);
-      qc.invalidateQueries({ queryKey: queryKeys.profile });
+      // Fire-and-forget : attendre les refetch lents (offline) bloquerait
+      // la mutation et le bouton « Enregistrer » du profil.
+      void qc.invalidateQueries({ queryKey: queryKeys.profile });
     },
   });
 }

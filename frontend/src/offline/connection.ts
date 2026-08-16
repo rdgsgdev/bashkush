@@ -63,6 +63,10 @@ export function markApiReachable() {
   const st = connectionState();
   if (st.status !== 'online') {
     st.setStatus('online');
+    // Des actions ont pu être mises en file pendant l'indétermination ou
+    // l'indisponibilité : on rejoue la file dès qu'on repasse en ligne.
+    // (La sonde santé déclenche aussi un rejeu ; les deux sont idempotents.)
+    void import('./queue').then(({ flushQueue }) => flushQueue());
   }
   stopHealthProbe();
 }
