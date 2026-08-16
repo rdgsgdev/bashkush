@@ -24,12 +24,14 @@ function MemberRow({
   removing: boolean;
 }) {
   const initial = (member.fullName || member.email || '?').charAt(0).toUpperCase();
+  const [photoFailed, setPhotoFailed] = useState(false); // image absente du cache offline
   return (
     <li className="flex items-center gap-3 rounded-xl bg-stone-100 px-3 py-2.5">
-      {member.photoUrl ? (
+      {member.photoUrl && !photoFailed ? (
         <img
           src={member.photoUrl}
           alt={member.fullName || member.email || ''}
+          onError={() => setPhotoFailed(true)}
           className="h-9 w-9 shrink-0 rounded-full object-cover"
         />
       ) : (

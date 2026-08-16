@@ -52,6 +52,7 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false); // image absente du cache offline
 
   // Charge le profil dans le brouillon une fois disponible.
   useEffect(() => {
@@ -247,10 +248,11 @@ export function ProfilePage() {
       <Section title="Identité">
         <div className="flex items-center gap-4">
           <div className="relative">
-            {profile?.photoUrl ? (
+            {profile?.photoUrl && !photoFailed ? (
               <img
                 src={profile.photoUrl}
                 alt="Photo de profil"
+                onError={() => setPhotoFailed(true)}
                 className="h-20 w-20 rounded-full border-2 border-brand-200 object-cover"
               />
             ) : (

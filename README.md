@@ -89,9 +89,10 @@ Ouvrez **http://localhost:5173** 🎉
 L'application reste consultable et en partie modifiable **sans réseau** ou pendant le **réveil du serveur Render** (free tier en veille) :
 
 - **Chargement instantané** : les données (plats, planning, liste de courses, profil) sont persistées dans **IndexedDB** (`frontend/src/api/persist.ts`) et restaurées immédiatement au chargement, puis revalidées en arrière-plan quand le serveur répond.
-- **PWA** : un service worker met en cache le shell applicatif (`vite-plugin-pwa`) — la page se charge même hors ligne et l'app est installable sur l'écran d'accueil. *Test local : `npm run build && npm run preview` (le SW n'est pas actif en `npm run dev`).*
+- **PWA** : un service worker met en cache le shell applicatif (`vite-plugin-pwa`) — la page se charge même hors ligne et l'app est installable sur l'écran d'accueil. Il est **actif aussi en `npm run dev`** (`devOptions.enabled`) pour permettre de tester le mode hors ligne en développement. *En production : aucun réglage nécessaire.*
 - **File d'actions** (`frontend/src/offline/queue.ts`) : quand le serveur ne répond pas, les actions de la **liste de courses** (cocher, ajouter, modifier, supprimer, archiver/restaurer), les **favoris** et l'**édition du profil** sont appliquées localement puis mises en file ; elles sont **rejouées automatiquement** au retour du serveur (sonde santé `/api/health`, `frontend/src/offline/connection.ts`).
 - **Réveil proactif** : un ping santé est envoyé à l'ouverture de l'app et au retour au premier plan pour réveiller le serveur Render le plus tôt possible.
+- **Images** : logos et icônes sont précachés ; les images distantes (photos de profil et de plats sur **Supabase Storage**, avatars Google) sont mises en cache au premier affichage en ligne (`CacheFirst`) et donc revoyables hors ligne. Une image jamais affichée en ligne est remplacée par un repli (initiale).
 
 ### Règles de synchronisation
 

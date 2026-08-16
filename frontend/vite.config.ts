@@ -12,7 +12,10 @@ export default defineConfig({
     // offline (src/offline/queue.ts) qui gèrent les données.
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'logo-inline.png', 'logo-menu.png'],
+      // SW actif aussi en `npm run dev` : sans lui, aucun test hors ligne en
+      // dev ne peut fonctionner (images locales comprises). Pour le désactiver
+      // temporairement, passer `enabled: false` et recharger.
+      devOptions: { enabled: true },
       manifest: {
         name: 'Bashkush',
         short_name: 'Bashkush',
@@ -35,7 +38,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,woff2}', 'pwa-*.png', 'logo-inline.png', 'logo-menu.png'],
+        // Les icônes PWA (pwa-*.png, référencées dans le manifeste) sont
+        // précachées automatiquement par le plugin — ne pas les lister ici
+        // (doublons dans le manifeste de précache sinon).
+        globPatterns: ['**/*.{js,css,html,svg,woff2}', 'logo-inline.png', 'logo-menu.png'],
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
@@ -54,6 +60,22 @@ export default defineConfig({
             options: {
               cacheName: 'google-fonts-webfonts',
               expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Images distantes : Storage Supabase (photos de profil, de plats,
+            // avatars des membres) et avatars Google — pour les revoir hors
+            // ligne après une seule consultation en ligne.
+            // ⚠️ Restreint à /storage/ côté Supabase : jamais les endpoints
+            // /auth (sinon le SW cacherait des réponses d'authentification).
+            urlPattern:
+              /^https?:\/\/(?:[^/]+\.supabase\.(?:co|in)\/storage\/|[^/]+\.(?:googleusercontent\.com|ggpht\.com)\/)/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'remote-images',
+              expiration: { maxEntries: 150, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              // 0 = réponses opaques (cross-origin sans CORS).
               cacheableResponse: { statuses: [0, 200] },
             },
           },
