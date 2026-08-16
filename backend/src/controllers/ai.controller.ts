@@ -11,10 +11,11 @@ import { AuthedRequest } from '../middleware/auth';
 import { ensureFamilyId } from '../lib/family';
 import { computeDailyTargets } from '../lib/nutrition';
 import { slugify } from '../lib/id';
-import { perplexityChatJSON } from '../lib/perplexity';
+import { perplexityChatJSON, fetchIngredientNutritionFromSonar } from '../lib/perplexity';
 import {
   generateMealRequestSchema,
   GenerateMealRequest,
+  ingredientNutritionQuerySchema,
 } from '../schemas/ai.schema';
 import { difficultyEnum, categoryEnum, CreateMealInput } from '../schemas/meal.schema';
 import type { Response } from 'express';
@@ -347,4 +348,17 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
   }
 
   res.json({ meal: normalizeMeal(parsed.data, request.servings) });
+});
+
+// ── Complétion des apports d'un ingrédient (ajout manuel) ────
+
+/**
+ * POST /api/ai/ingredient-nutrition — apports d'un ingrédient pour une
+ * quantité donnée, complétés par Sonar. Utilisé par la modale d'édition
+ * d'un plat lors de l'ajout/modification manuelle d'un ingrédient.
+ */
+export const getIngredientNutrition = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const { name, quantity, unit } = ingredientNutritionQuerySchema.parse(req.body);
+  const nutrition = await fetchIngredientNutritionFromSonar(name, quantity, unit);
+  res.json({ nutrition });
 });

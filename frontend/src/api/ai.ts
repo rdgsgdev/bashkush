@@ -2,7 +2,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { api } from './client';
-import type { Category, Difficulty, MealDraft } from '../types';
+import type { Category, Difficulty, MealDraft, Nutrition } from '../types';
 
 export interface GenerateMealPayload {
   /** userId des profils (membres de la famille) pris en compte. */
@@ -31,4 +31,25 @@ export async function generateMeal(payload: GenerateMealPayload): Promise<MealDr
 
 export function useGenerateMeal() {
   return useMutation({ mutationFn: generateMeal });
+}
+
+// ── Complétion des apports d'un ingrédient (POST /ai/ingredient-nutrition) ──
+
+/**
+ * Apports d'un ingrédient pour une quantité donnée, complétés par Sonar
+ * (Perplexity) côté backend. Retourne les valeurs TOTALES pour la quantité
+ * demandée, ou null si l'IA n'a rien renvoyé d'exploitable.
+ */
+export async function fetchIngredientNutrition(
+  name: string,
+  quantity: number,
+  unit: string,
+): Promise<Nutrition | null> {
+  const { data } = await api.post<{ nutrition: Nutrition }>('/ai/ingredient-nutrition', {
+    name,
+    quantity,
+    unit,
+  });
+  const hasAny = Object.values(data.nutrition ?? {}).some((v) => v !== undefined);
+  return hasAny ? data.nutrition : null;
 }

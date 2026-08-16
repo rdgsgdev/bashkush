@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Upload, Trash2, Plus, ImageIcon, AlertCircle, ChevronDown } from 'lucide-react';
+import { Upload, Trash2, Plus, ImageIcon, AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Field, Input, Textarea, Select } from '../ui/FormControl';
@@ -11,6 +11,7 @@ import {
   useDeleteMeal,
   useUploadMealImage,
 } from '../../api/meals';
+import { fetchIngredientNutrition } from '../../api/ai';
 import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS, AISLE_OPTIONS_LIST, UNIT_OPTIONS } from '../../lib/options';
 import {
   computeMealNutrition,
@@ -40,6 +41,16 @@ const NUTRIENT_FIELDS: readonly { key: NutritionKey; label: string }[] = [
   { key: 'fat', label: 'Lip' },
   { key: 'fiber', label: 'Fib' },
 ];
+
+/** Délai de frappe avant d'interroger Sonar (ms). */
+const AI_DEBOUNCE_MS = 700;
+
+/**
+ * Clé identifiant le triplet interrogé auprès de Sonar (nom | quantité | unité).
+ * Le rayon et les notes n'en font pas partie : aucun impact sur les apports.
+ */
+const nutritionKeyOf = (ing: DraftIngredient): string =>
+  `${ing.name.trim().toLowerCase()}|${ing.quantity ?? ''}|${ing.unit.trim()}`;
 
 const blankDraft = (): MealEditionDraft => ({
   name: '',
@@ -94,8 +105,19 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
   const [error, setError] = useState<string | null>(null);
   // Identifiant de l'ingrédient dont le bloc « Apports » est déplié.
   const [openNutritionId, setOpenNutritionId] = useState<string | null>(null);
+  // ── Complétion IA (Sonar) des apports par ingrédient ──
+  // Dernier triplet interrogé par ingrédient (évite les rappels redondants).
+  const lastQueried = useRef<Map<string, string>>(new Map());
+  // Minuteries de délai de frappe par ingrédient.
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+
+  /** Consigne les triplets déjà connus : aucun appel IA tant que nom/qté/unité ne changent pas. */
+  const markQueried = (ings: DraftIngredient[]) => {
+    for (const ing of ings) lastQueried.current.set(ing.id, nutritionKeyOf(ing));
+  };
 
   const createMeal = useCreateMeal();
   const updateMeal = useUpdateMeal();
@@ -105,7 +127,11 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
   // (Ré)initialise l'état quand la modale s'ouvre ou change de repas.
   useEffect(() => {
     if (open) {
-      setDraft(meal ? toDraft(meal) : blankDraft());
+      const initial = meal ? toDraft(meal) : blankDraft();
+      setDraft(initial);
+      // Les ingrédients existants ne déclenchent pas d'appel IA d'office :
+      // Seule une modification (nom, quantité, unité) re-questionne Sonar.
+      markQueried(initial.ingredients);
       setPendingImage(null);
       setImagePreview(meal?.imageUrl ?? null);
       setError(null);
@@ -115,8 +141,15 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
 
   // Quand un repas est fourni en édition mais ses données changent.
   useEffect(() => {
-    if (meal) setDraft(toDraft(meal));
+    if (meal) {
+      const next = toDraft(meal);
+      setDraft(next);
+      markQueried(next.ingredients);
+    }
   }, [meal]);
+
+  // Annule les appels IA en attente au démontage de la modale.
+  useEffect(() => () => debounceTimers.current.forEach((t) => clearTimeout(t)), []);
 
   const set = <K extends keyof MealDraft>(key: K, value: MealDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -133,6 +166,14 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
         quantity: i.quantity === undefined ? undefined : Math.round(i.quantity * ratio * 1000) / 1000,
       })),
     }));
+    // Les quantités mises à l'échelle ne re-déclenchent pas d'appel IA :
+    // les apports par ingrédient sont proportionnels (quantité de référence).
+    markQueried(
+      draft.ingredients.map((i) => ({
+        ...i,
+        quantity: i.quantity === undefined ? undefined : Math.round(i.quantity * ratio * 1000) / 1000,
+      })),
+    );
   };
 
   const updateIngredient = (idx: number, patch: Partial<DraftIngredient>) =>
@@ -156,6 +197,52 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
         .filter((_, k) => k !== idx)
         .map((s, k) => ({ ...s, stepNumber: k + 1 })),
     }));
+
+  // ── Complétion IA (Sonar) ─────────────────────────────────
+  // Ajout manuel ou modification du nom, de la quantité ou de l'unité →
+  // Sonar est interrogé (après délai de frappe) et remplit les apports,
+  // qui restent éditables. Le rayon ne déclenche rien.
+  useEffect(() => {
+    for (const ing of draft.ingredients) {
+      const { quantity } = ing;
+      // Triplet incomplet : annule tout appel en attente pour cet ingrédient.
+      if (ing.name.trim().length < 2 || quantity === undefined || quantity <= 0 || !ing.unit.trim()) {
+        clearTimeout(debounceTimers.current.get(ing.id));
+        debounceTimers.current.delete(ing.id);
+        continue;
+      }
+      const key = nutritionKeyOf(ing);
+      // Déjà interrogé pour ce triplet exact : pas de nouvel appel.
+      if (lastQueried.current.get(ing.id) === key) continue;
+      lastQueried.current.set(ing.id, key);
+
+      const { id } = ing;
+      const params = { name: ing.name.trim(), quantity, unit: ing.unit.trim() };
+      clearTimeout(debounceTimers.current.get(id));
+      debounceTimers.current.set(
+        id,
+        setTimeout(async () => {
+          setAiLoading((s) => ({ ...s, [id]: true }));
+          try {
+            const nutrition = await fetchIngredientNutrition(params.name, params.quantity, params.unit);
+            setDraft((d) => ({
+              ...d,
+              ingredients: d.ingredients.map((i) => {
+                if (i.id !== id || !nutrition) return i;
+                // N'écrase que si l'ingrédient n'a pas changé depuis la requête.
+                if (nutritionKeyOf(i) !== key) return i;
+                return { ...i, nutrition: { ...nutrition, quantity: params.quantity } };
+              }),
+            }));
+          } catch {
+            // Échec silencieux : les champs restent vides et éditables à la main.
+          } finally {
+            setAiLoading((s) => ({ ...s, [id]: false }));
+          }
+        }, AI_DEBOUNCE_MS),
+      );
+    }
+  }, [draft.ingredients]);
 
   // ── Apports par portion ──────────────────────────────────
   // Calculés en direct depuis les apports portés par chaque ingrédient
@@ -224,6 +311,8 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
           })),
         });
         setError(null);
+        // Les ingrédients importés ne sont pas re-questionnés tant que non modifiés.
+        markQueried(importedIngredients);
       } catch {
         setError('Fichier JSON invalide. Vérifiez le format.');
       }
@@ -497,7 +586,12 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
                         <ChevronDown
                           className={`h-3.5 w-3.5 transition-transform ${openNutritionId === ing.id ? '' : '-rotate-90'}`}
                         />
-                        Apports{hasNutritionValues(ing.nutrition) ? ' · renseignés' : ''}
+                        Apports
+                        {aiLoading[ing.id] ? (
+                          <Loader2 className="h-3 w-3 animate-spin" aria-label="Recherche des apports via Sonar" />
+                        ) : hasNutritionValues(ing.nutrition) ? (
+                          '· renseignés'
+                        ) : ''}
                       </button>
                       {openNutritionId === ing.id && (
                         <div className="mt-1.5">

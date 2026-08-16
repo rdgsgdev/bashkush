@@ -130,6 +130,12 @@ Les plats peuvent être générés par une IA externe (ChatGPT, etc.) puis impor
 - Les apports par ingrédient sont stockés **en arrière-plan** (non affichés dans le détail du plat) et restent modifiables dans la modale d'édition (bloc « Apports » replié de chaque ingrédient).
 - Les apports par portion du plat sont recalculés en continu dans la modale, puis côté backend à l'enregistrement : **Σ (apports d'un ingrédient × quantité actuelle ÷ quantité de référence) ÷ portions**. Les plats sans apports par ingrédient conservent leur nutrition globale existante.
 
+### Complétion automatique des apports (Sonar)
+
+Lors de l'**ajout manuel** d'un ingrédient (nom + quantité + unité renseignés), le backend interroge **Sonar** (Perplexity AI) et remplit automatiquement les apports de l'ingrédient — les champs restent modifiables à la main. Modifier le **nom**, la **quantité** ou l'**unité** re-questionne l'IA (après un délai de frappe) ; changer le **rayon** ou les notes n'a aucun effet. Requête : `POST /api/ai/ingredient-nutrition` `{ name, quantity, unit }`.
+
+> ⚙️ Configuration : renseignez `PERPLEXITY_API_KEY` (et éventuellement `PERPLEXITY_MODEL`, défaut `sonar`) dans `backend/.env` — voir `.env.example`. Sans clé, la complétion échoue silencieusement et les champs restent saisissables manuellement.
+
 ---
 
 ## 🔐 Sécurité / secrets
