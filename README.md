@@ -84,6 +84,24 @@ Ouvrez **http://localhost:5173** 🎉
 
 ---
 
+## 📴 Mode hors ligne (offline)
+
+L'application reste consultable et en partie modifiable **sans réseau** ou pendant le **réveil du serveur Render** (free tier en veille) :
+
+- **Chargement instantané** : les données (plats, planning, liste de courses, profil) sont persistées dans **IndexedDB** (`frontend/src/api/persist.ts`) et restaurées immédiatement au chargement, puis revalidées en arrière-plan quand le serveur répond.
+- **PWA** : un service worker met en cache le shell applicatif (`vite-plugin-pwa`) — la page se charge même hors ligne et l'app est installable sur l'écran d'accueil. *Test local : `npm run build && npm run preview` (le SW n'est pas actif en `npm run dev`).*
+- **File d'actions** (`frontend/src/offline/queue.ts`) : quand le serveur ne répond pas, les actions de la **liste de courses** (cocher, ajouter, modifier, supprimer, archiver/restaurer), les **favoris** et l'**édition du profil** sont appliquées localement puis mises en file ; elles sont **rejouées automatiquement** au retour du serveur (sonde santé `/api/health`, `frontend/src/offline/connection.ts`).
+- **Réveil proactif** : un ping santé est envoyé à l'ouverture de l'app et au retour au premier plan pour réveiller le serveur Render le plus tôt possible.
+
+### Règles de synchronisation
+
+- Les requêtes rejouables utilisent des **valeurs absolues** (`checked`, `isFavorite`) et des ids générés côté client → un rejeu ne crée pas de doublon (le backend renvoie l'item existant si l'`id` est déjà pris).
+- **404** au rejeu = l'élément a été supprimé entre-temps → l'action est considérée synchronisée ; autre erreur 4xx = conflit → l'action est abandonnée (journal console).
+- Nécessitent une connexion (désactivés hors ligne avec mention explicite) : génération IA, planification de repas (le moteur de liste de courses tourne côté serveur), uploads de photos, invitations famille.
+- Conflits multi-appareils : **dernière écriture gagne** (le serveur reste autoritaire au moment du rejeu).
+
+---
+
 ## 📚 Documentation détaillée
 
 - **[backend/README.md](./backend/README.md)** — configuration Supabase, base de données, seed, lancement local, **déploiement Render** + Storage.

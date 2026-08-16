@@ -1,19 +1,11 @@
 import { useEffect } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { AppRouter } from './router';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+import { queryClient } from './queryClient';
+import { initConnection } from './offline/connection';
 
 /** Restaure la session au chargement puis suit les changements d'état d'auth. */
 function AuthInitializer() {
@@ -32,11 +24,20 @@ function AuthInitializer() {
   return null;
 }
 
+/** Sonde santé (réveil proactif du serveur) + écoute online/offline. */
+function ConnectionInitializer() {
+  useEffect(() => {
+    initConnection();
+  }, []);
+  return null;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthInitializer />
+        <ConnectionInitializer />
         <AppRouter />
       </BrowserRouter>
     </QueryClientProvider>

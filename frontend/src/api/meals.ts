@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
+import { queryPersisterOption } from './persist';
+import { runOfflineAware } from '../offline/queue';
+import { queryClient } from '../queryClient';
 import type { Meal, MealDraft } from '../types';
 
 export async function fetchMeals(): Promise<Meal[]> {
@@ -23,8 +26,23 @@ export async function deleteMeal(id: string): Promise<void> {
   await api.delete(`/meals/${id}`);
 }
 export async function toggleFavorite(id: string): Promise<Meal> {
-  const { data } = await api.patch<Meal>(`/meals/${id}/favorite`);
-  return data;
+  // Valeur absolue (rejeu offline idempotent) : l'update optimiste du hook a
+  // déjà basculé le cache au moment où ce fetcher s'exécute → la valeur lue
+  // est la nouvelle valeur. Cache absent → bascule côté serveur.
+  const cached = queryClient.getQueryData<Meal[]>(queryKeys.meals)?.find((m) => m.id === id);
+  const isFavorite = cached?.isFavorite;
+  return runOfflineAware({
+    method: 'patch',
+    url: `/meals/${id}/favorite`,
+    body: { isFavorite },
+    invalidates: [['meals']],
+    label: cached ? `${isFavorite ? 'Ajouter aux' : 'Retirer des'} favoris « ${cached.name} »` : 'Favori repas',
+    synthetic: () => (cached ?? { id }) as Meal,
+    request: async () => {
+      const { data } = await api.patch<Meal>(`/meals/${id}/favorite`, { isFavorite });
+      return data;
+    },
+  });
 }
 export async function uploadMealImage(id: string, file: File): Promise<Meal> {
   const form = new FormData();
@@ -38,7 +56,11 @@ export async function uploadMealImage(id: string, file: File): Promise<Meal> {
 // ── Hooks ───────────────────────────────────────────────────
 
 export function useMeals() {
-  return useQuery({ queryKey: queryKeys.meals, queryFn: fetchMeals });
+  return useQuery({
+    queryKey: queryKeys.meals,
+    queryFn: fetchMeals,
+    persister: queryPersisterOption,
+  });
 }
 
 export function useCreateMeal() {

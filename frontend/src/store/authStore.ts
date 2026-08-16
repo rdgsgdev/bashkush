@@ -16,6 +16,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   loading: true,
   setSession: (session) => set({ session, user: session?.user ?? null, loading: false }),
   signOut: async () => {
+    // La file d'actions offline est liée au compte : on la vide pour éviter
+    // de rejouer des actions d'une famille avec la session d'un autre compte.
+    const { clearQueue } = await import('../offline/queue');
+    await clearQueue().catch(() => undefined);
     await supabase.auth.signOut();
     set({ session: null, user: null });
   },

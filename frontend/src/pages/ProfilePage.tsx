@@ -9,8 +9,10 @@ import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onbo
 import { FamilySection } from '../components/profile/FamilySection';
 import { useProfile, useSaveProfile, useUploadProfileImage } from '../api/profile';
 import { useAuthStore } from '../store/authStore';
+import { useConnection } from '../hooks/useConnection';
 import { computeDailyTargets } from '../lib/nutrition';
-import type { Profile, ProfileDraft } from '../types/profile';
+import type { ProfileDraft } from '../types/profile';
+import type { ProfileResponse } from '../api/profile';
 import {
   computeAge,
   SEX_LABELS,
@@ -41,6 +43,10 @@ export function ProfilePage() {
   const saveProfile = useSaveProfile();
   const uploadImage = useUploadProfileImage();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // L'upload de photo passe par Supabase Storage : connexion requise.
+  const { status } = useConnection();
+  const offline = status !== 'online';
 
   const [draft, setDraft] = useState<ProfileDraft>({});
   const [error, setError] = useState<string | null>(null);
@@ -88,10 +94,11 @@ export function ProfilePage() {
       Object.entries(draft).map(([k, v]) => [k, typeof v === 'string' && v.trim() === '' ? null : v]),
     ) as ProfileDraft;
 
-  const onSaveSuccess = (savedProfile: Profile) => {
+  const onSaveSuccess = (savedProfile: ProfileResponse) => {
     setSaved(true);
     // Resynchronise les objectifs du brouillon avec la réponse
     // (recalcul auto côté serveur après un changement de poids/objectif…).
+    // Hors ligne : réponse synthétique = brouillon fusionné (objectifs inchangés).
     setDraft((d) => ({
       ...d,
       dailyCalories: savedProfile.dailyCalories ?? null,
@@ -254,9 +261,10 @@ export function ProfilePage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={saving}
+              disabled={saving || offline}
               className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-white shadow-soft transition active:scale-95 disabled:opacity-50"
               aria-label="Changer la photo"
+              title={offline ? 'Connexion requise pour changer la photo' : 'Changer la photo'}
             >
               <Camera className="h-4 w-4" />
             </button>

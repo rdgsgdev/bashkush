@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
+import { queryPersisterOption } from './persist';
 import type { FamilyInvitationView, FamilyMemberView, FamilyMemberProfileView } from '../types/family';
 
 export async function getFamily(): Promise<FamilyMemberView[]> {
@@ -40,6 +41,7 @@ export function useFamily() {
     queryKey: queryKeys.family,
     queryFn: getFamily,
     staleTime: 60_000,
+    persister: queryPersisterOption,
     // Refetch au focus : le statut des invitations peut changer côté invité.
     refetchOnWindowFocus: true,
   });
@@ -50,6 +52,7 @@ export function useFamilyMembers() {
     queryKey: queryKeys.familyMembers,
     queryFn: getFamilyMemberProfiles,
     staleTime: 60_000,
+    persister: queryPersisterOption,
   });
 }
 
@@ -74,6 +77,7 @@ export function useFamilyInvitations() {
     queryKey: queryKeys.familyInvitations,
     queryFn: getFamilyInvitations,
     staleTime: 60_000,
+    persister: queryPersisterOption,
     refetchOnWindowFocus: true,
   });
 }

@@ -69,7 +69,16 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
           input: { name, quantity: qty, unit, aisle: finalAisle, notes },
         });
       } else {
-        await create.mutateAsync({ name, quantity: qty, unit, aisle: finalAisle, notes });
+        // UUID généré côté client : rend la création rejouable hors ligne
+        // (le backend traite un doublon d'id comme un succès).
+        await create.mutateAsync({
+          id: crypto.randomUUID(),
+          name,
+          quantity: qty,
+          unit,
+          aisle: finalAisle,
+          notes,
+        });
       }
       onClose();
     } catch (err: any) {

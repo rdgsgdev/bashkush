@@ -10,6 +10,7 @@ import {
   useAcceptFamilyInvitation,
   useDeclineFamilyInvitation,
 } from '../../api/family';
+import { useConnection } from '../../hooks/useConnection';
 import type { FamilyInvitationView, FamilyMemberView } from '../../types/family';
 
 /** Ligne d'un membre de la famille (avatar, nom/courriel, statut, retrait). */
@@ -127,6 +128,10 @@ export function FamilySection() {
   const acceptInvitation = useAcceptFamilyInvitation();
   const declineInvitation = useDeclineFamilyInvitation();
 
+  // Les invitations familiales nécessitent le serveur : connexion requise.
+  const { status } = useConnection();
+  const offline = status !== 'online';
+
   const [email, setEmail] = useState('');
   const [familyError, setFamilyError] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
@@ -240,7 +245,8 @@ export function FamilySection() {
             type="button"
             onClick={handleAdd}
             loading={addMember.isPending}
-            disabled={!email.trim()}
+            disabled={!email.trim() || offline}
+            title={offline ? 'Connexion requise pour inviter un membre' : undefined}
             className="shrink-0"
           >
             <UserPlus className="h-4 w-4" />

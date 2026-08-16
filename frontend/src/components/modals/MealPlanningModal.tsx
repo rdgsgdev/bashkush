@@ -10,6 +10,7 @@ import { todayValue, cn, formatQty } from '../../lib/utils';
 import { useCreateMealPlan, useUpdateMealPlan, useDeleteMealPlan } from '../../api/mealPlans';
 import type { IngredientSelection } from '../../api/mealPlans';
 import { useMeals } from '../../api/meals';
+import { useConnection } from '../../hooks/useConnection';
 import { AISLE_LABELS, AISLE_OPTIONS } from '../../types';
 import type { Ingredient, Meal, MealPlan, MealPlanStatus } from '../../types';
 
@@ -46,6 +47,10 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
   const createPlan = useCreateMealPlan();
   const updatePlan = useUpdateMealPlan();
   const deletePlan = useDeleteMealPlan();
+
+  // La planification génère la liste de courses côté serveur : connexion requise.
+  const { status: connectionStatus } = useConnection();
+  const offline = connectionStatus !== 'online';
 
   // Ingrédients du plat sélectionné (cache meals, fallback : plat du plan édité).
   const { data: mealsCache } = useMeals();
@@ -237,7 +242,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
         <Button variant="secondary" onClick={onClose}>
           Annuler
         </Button>
-        <Button onClick={handleContinue} loading={saving}>
+        <Button onClick={handleContinue} loading={saving} disabled={offline}>
           {needsIngredientStep ? 'Continuer' : 'Enregistrer'}
         </Button>
       </div>
@@ -291,6 +296,12 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
         ℹ️ À l'étape suivante, vous choisirez les ingrédients à ajouter à votre liste de courses
         (proportionnels au nombre de portions) et pourrez ajuster leurs quantités.
       </p>
+
+      {offline && (
+        <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
+          ⚠️ Connexion requise : la planification génère la liste de courses côté serveur.
+        </p>
+      )}
     </div>
   );
 
@@ -300,7 +311,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
       <Button variant="secondary" onClick={() => setStep(1)}>
         <ArrowLeft className="h-4 w-4" /> Retour
       </Button>
-      <Button onClick={handleConfirm} loading={saving}>
+      <Button onClick={handleConfirm} loading={saving} disabled={offline}>
         Enregistrer la planification
       </Button>
     </div>

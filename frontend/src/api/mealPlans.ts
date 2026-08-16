@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
+import { queryPersisterOption } from './persist';
 import type { MealPlan, MealPlanStatus } from '../types';
 
 export interface MealPlanListParams {
@@ -66,6 +67,7 @@ export function useMealPlansForDate(date?: string) {
   return useQuery({
     queryKey: queryKeys.mealPlans(date ? { date } : {}),
     queryFn: () => fetchMealPlans(date ? { date } : {}),
+    persister: queryPersisterOption,
   });
 }
 
@@ -76,6 +78,7 @@ export function useMealPlansForRange(from?: string, to?: string) {
     queryKey: queryKeys.mealPlans({ from, to }),
     queryFn: () => fetchMealPlans({ from, to }),
     enabled,
+    persister: queryPersisterOption,
   });
 }
 

@@ -1,47 +1,231 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
+import { queryPersisterOption } from './persist';
+import { runOfflineAware } from '../offline/queue';
+import { queryClient } from '../queryClient';
 import type { GroceryAisle, GroceryItem, GroceryListResponse } from '../types';
+
+/**
+ * Liste de courses offline-aware :
+ * - lectures persistées dans IndexedDB (consultation hors ligne) ;
+ * - mutations mises en file quand le serveur est injoignable puis rejouées
+ *   automatiquement à son retour (voir src/offline/queue.ts) ;
+ * - mises à jour optimistes immédiatement visibles, annulées seulement en cas
+ *   d'erreur réelle du serveur (pas quand l'action est mise en file).
+ */
+
+// ── Helpers de cache (partagés actifs/archivés) ───────────────
+
+function findCachedItem(id: string): GroceryItem | undefined {
+  for (const archived of [false, true]) {
+    const cache = queryClient.getQueryData<GroceryListResponse>(queryKeys.grocery(archived));
+    const item = cache?.items.find((it) => it.id === id);
+    if (item) return item;
+  }
+  return undefined;
+}
+
+type GrocerySnapshots = {
+  active?: GroceryListResponse;
+  archived?: GroceryListResponse;
+};
+
+function snapshotCaches(qc: ReturnType<typeof useQueryClient>): GrocerySnapshots {
+  return {
+    active: qc.getQueryData<GroceryListResponse>(queryKeys.grocery(false)),
+    archived: qc.getQueryData<GroceryListResponse>(queryKeys.grocery(true)),
+  };
+}
+
+function restoreCaches(qc: ReturnType<typeof useQueryClient>, snap: GrocerySnapshots) {
+  if (snap.active) qc.setQueryData(queryKeys.grocery(false), snap.active);
+  if (snap.archived) qc.setQueryData(queryKeys.grocery(true), snap.archived);
+}
+
+function updateBothCaches(
+  qc: ReturnType<typeof useQueryClient>,
+  fn: (items: GroceryItem[]) => GroceryItem[],
+) {
+  for (const archived of [false, true]) {
+    const key = queryKeys.grocery(archived);
+    const old = qc.getQueryData<GroceryListResponse>(key);
+    if (old) qc.setQueryData<GroceryListResponse>(key, { ...old, items: fn(old.items) });
+  }
+}
+
+/** Déplace des items entre les listes actif ↔ archivé (après archive/désarchivage). */
+function moveItems(
+  qc: ReturnType<typeof useQueryClient>,
+  ids: string[],
+  toArchived: boolean,
+  uncheck = false,
+) {
+  const moved: GroceryItem[] = [];
+  updateBothCaches(qc, (items) =>
+    items.filter((it) => {
+      if (ids.includes(it.id)) {
+        moved.push(it);
+        return false;
+      }
+      return true;
+    }),
+  );
+  if (moved.length === 0) return;
+  const targetKey = queryKeys.grocery(toArchived);
+  const target = qc.getQueryData<GroceryListResponse>(targetKey);
+  if (target) {
+    qc.setQueryData<GroceryListResponse>(targetKey, {
+      ...target,
+      items: [
+        ...target.items,
+        ...moved.map((it) => ({
+          ...it,
+          archived: toArchived,
+          ...(uncheck ? { checked: false } : {}),
+        })),
+      ],
+    });
+  }
+}
+
+// ── Fetchers ─────────────────────────────────────────────────
 
 export async function fetchGrocery(archived = false): Promise<GroceryListResponse> {
   const { data } = await api.get<GroceryListResponse>('/grocery-items', { params: { archived } });
   return data;
 }
 
-export async function createGroceryItem(input: {
+export interface CreateGroceryItemInput {
+  /** UUID généré côté client : rend le rejeu offline idempotent. */
+  id: string;
   name: string;
   quantity?: number;
   unit: string;
   aisle: string;
   notes?: string | null;
-}): Promise<GroceryItem> {
-  const { data } = await api.post<GroceryItem>('/grocery-items', input);
-  return data;
+}
+
+export async function createGroceryItem(input: CreateGroceryItemInput): Promise<GroceryItem> {
+  const now = new Date().toISOString();
+  const item: GroceryItem = {
+    id: input.id,
+    name: input.name,
+    quantity: input.quantity ?? 1,
+    unit: input.unit,
+    aisle: input.aisle,
+    isManual: true,
+    checked: false,
+    archived: false,
+    notes: input.notes ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return runOfflineAware({
+    method: 'post',
+    url: '/grocery-items',
+    body: input,
+    invalidates: [['grocery']],
+    label: `Ajouter « ${input.name} »`,
+    synthetic: () => item,
+    request: async () => {
+      const { data } = await api.post<GroceryItem>('/grocery-items', input);
+      return data;
+    },
+  });
 }
 
 export async function updateGroceryItem(
   id: string,
   input: Partial<{ name: string; quantity: number; unit: string; aisle: string; notes: string | null; checked: boolean }>,
 ): Promise<GroceryItem> {
-  const { data } = await api.put<GroceryItem>(`/grocery-items/${id}`, input);
-  return data;
+  const cached = findCachedItem(id);
+  return runOfflineAware({
+    method: 'put',
+    url: `/grocery-items/${id}`,
+    body: input,
+    invalidates: [['grocery']],
+    label: cached ? `Modifier « ${cached.name} »` : 'Modifier un article',
+    synthetic: () => (cached ? ({ ...cached, ...input } as GroceryItem) : ({} as GroceryItem)),
+    request: async () => {
+      const { data } = await api.put<GroceryItem>(`/grocery-items/${id}`, input);
+      return data;
+    },
+  });
 }
 
 export async function deleteGroceryItem(id: string): Promise<void> {
-  await api.delete(`/grocery-items/${id}`);
+  const cached = findCachedItem(id);
+  return runOfflineAware({
+    method: 'delete',
+    url: `/grocery-items/${id}`,
+    invalidates: [['grocery']],
+    label: cached ? `Supprimer « ${cached.name} »` : 'Supprimer un article',
+    synthetic: () => undefined,
+    request: async () => {
+      await api.delete(`/grocery-items/${id}`);
+    },
+  });
 }
 
 export async function toggleCheckItem(id: string): Promise<GroceryItem> {
-  const { data } = await api.patch<GroceryItem>(`/grocery-items/${id}/check`);
-  return data;
+  // Valeur absolue (rejeu idempotent) : l'update optimiste du hook a déjà
+  // basculé le cache au moment où ce fetcher s'exécute → la valeur lue est
+  // la nouvelle valeur. Cache absent → bascule côté serveur.
+  const cached = findCachedItem(id);
+  const checked = cached?.checked;
+  return runOfflineAware({
+    method: 'patch',
+    url: `/grocery-items/${id}/check`,
+    body: { checked },
+    invalidates: [['grocery']],
+    label: cached ? `${checked ? 'Cocher' : 'Décocher'} « ${cached.name} »` : 'Cocher un article',
+    synthetic: () => (cached ? { ...cached, checked: !!checked } : ({} as GroceryItem)),
+    request: async () => {
+      const { data } = await api.patch<GroceryItem>(`/grocery-items/${id}/check`, { checked });
+      return data;
+    },
+  });
 }
 
-export async function archiveItems(mode: 'checked' | 'all', ids?: string[]): Promise<void> {
-  await api.post('/grocery-items/archive', { mode, ids });
+export async function archiveItems(mode: 'checked' | 'all', ids?: string[]): Promise<string[]> {
+  // Snapshot des ids concernés au moment de l'action : le rejeu offline reste
+  // déterministe même si la liste évolue côté serveur entre-temps.
+  const active = queryClient.getQueryData<GroceryListResponse>(queryKeys.grocery(false));
+  const snapshot =
+    ids ??
+    (active?.items ?? [])
+      .filter((it) => (mode === 'checked' ? it.checked : true))
+      .map((it) => it.id);
+  return runOfflineAware({
+    method: 'post',
+    url: '/grocery-items/archive',
+    body: { mode, ids: snapshot },
+    invalidates: [['grocery']],
+    label: mode === 'checked' ? 'Archiver les articles cochés' : 'Archiver toute la liste',
+    synthetic: () => snapshot,
+    request: async () => {
+      await api.post('/grocery-items/archive', { mode, ids: snapshot });
+      return snapshot;
+    },
+  });
 }
 
-export async function unarchiveItems(ids?: string[]): Promise<void> {
-  await api.post('/grocery-items/unarchive', { ids });
+export async function unarchiveItems(ids?: string[]): Promise<string[]> {
+  const archived = queryClient.getQueryData<GroceryListResponse>(queryKeys.grocery(true));
+  const snapshot = ids ?? (archived?.items ?? []).map((it) => it.id);
+  return runOfflineAware({
+    method: 'post',
+    url: '/grocery-items/unarchive',
+    body: { ids: snapshot },
+    invalidates: [['grocery']],
+    label: 'Restaurer des articles archivés',
+    synthetic: () => snapshot,
+    request: async () => {
+      await api.post('/grocery-items/unarchive', { ids: snapshot });
+      return snapshot;
+    },
+  });
 }
 
 export async function fetchAisles(): Promise<GroceryAisle[]> {
@@ -49,12 +233,13 @@ export async function fetchAisles(): Promise<GroceryAisle[]> {
   return data;
 }
 
-// ── Hooks ───────────────────────────────────────────────────
+// ── Hooks ────────────────────────────────────────────────────
 
 export function useGrocery(archived = false) {
   return useQuery({
     queryKey: queryKeys.grocery(archived),
     queryFn: () => fetchGrocery(archived),
+    persister: queryPersisterOption,
   });
 }
 
@@ -68,19 +253,15 @@ export function useToggleCheck() {
   return useMutation({
     mutationFn: toggleCheckItem,
     onMutate: async (id: string) => {
-      await qc.cancelQueries({ queryKey: queryKeys.grocery(false) });
-      const prev = qc.getQueryData<GroceryListResponse>(queryKeys.grocery(false));
-      qc.setQueryData<GroceryListResponse>(queryKeys.grocery(false), (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          items: old.items.map((it) => (it.id === id ? { ...it, checked: !it.checked } : it)),
-        };
-      });
-      return { prev };
+      await qc.cancelQueries({ queryKey: ['grocery'] });
+      const snap = snapshotCaches(qc);
+      updateBothCaches(qc, (items) =>
+        items.map((it) => (it.id === id ? { ...it, checked: !it.checked } : it)),
+      );
+      return { snap };
     },
     onError: (_e, _id, ctx) => {
-      if (ctx?.prev) qc.setQueryData(queryKeys.grocery(false), ctx.prev);
+      if (ctx?.snap) restoreCaches(qc, ctx.snap);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
   });
@@ -90,7 +271,36 @@ export function useCreateGroceryItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createGroceryItem,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onMutate: async (input: CreateGroceryItemInput) => {
+      const now = new Date().toISOString();
+      const item: GroceryItem = {
+        id: input.id,
+        name: input.name,
+        quantity: input.quantity ?? 1,
+        unit: input.unit,
+        aisle: input.aisle,
+        isManual: true,
+        checked: false,
+        archived: false,
+        notes: input.notes ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await qc.cancelQueries({ queryKey: ['grocery'] });
+      const snap = snapshotCaches(qc);
+      const active = snap.active;
+      if (active) {
+        qc.setQueryData<GroceryListResponse>(queryKeys.grocery(false), {
+          ...active,
+          items: [...active.items, item],
+        });
+      }
+      return { snap };
+    },
+    onError: (_e, _input, ctx) => {
+      if (ctx?.snap) restoreCaches(qc, ctx.snap);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
   });
 }
 
@@ -99,7 +309,18 @@ export function useUpdateGroceryItem() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Parameters<typeof updateGroceryItem>[1] }) =>
       updateGroceryItem(id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onMutate: async ({ id, input }) => {
+      await qc.cancelQueries({ queryKey: ['grocery'] });
+      const snap = snapshotCaches(qc);
+      updateBothCaches(qc, (items) =>
+        items.map((it) => (it.id === id ? { ...it, ...input } : it)),
+      );
+      return { snap };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.snap) restoreCaches(qc, ctx.snap);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
   });
 }
 
@@ -107,7 +328,16 @@ export function useDeleteGroceryItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: deleteGroceryItem,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['grocery'] });
+      const snap = snapshotCaches(qc);
+      updateBothCaches(qc, (items) => items.filter((it) => it.id !== id));
+      return { snap };
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.snap) restoreCaches(qc, ctx.snap);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
   });
 }
 
@@ -116,7 +346,12 @@ export function useArchiveItems() {
   return useMutation({
     mutationFn: ({ mode, ids }: { mode: 'checked' | 'all'; ids?: string[] }) =>
       archiveItems(mode, ids),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    // Le déplacement dans le cache se fait au succès (la requête renvoie le
+    // snapshot exact des ids archivés, réel comme synthétique).
+    onSuccess: (movedIds, { mode }) => {
+      if (movedIds.length > 0) moveItems(qc, movedIds, true, mode === 'all');
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
   });
 }
 
@@ -124,6 +359,9 @@ export function useUnarchiveItems() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids?: string[]) => unarchiveItems(ids),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
+    onSuccess: (movedIds) => {
+      if (movedIds.length > 0) moveItems(qc, movedIds, false);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['grocery'] }),
   });
 }

@@ -1,6 +1,6 @@
 import { prisma } from '../prisma';
 import { asyncHandler, HttpError } from '../middleware/error';
-import { createMealSchema, updateMealSchema, CreateMealInput, UpdateMealInput } from '../schemas/meal.schema';
+import { createMealSchema, updateMealSchema, favoriteSchema, CreateMealInput, UpdateMealInput } from '../schemas/meal.schema';
 import { generateMealId } from '../lib/id';
 import { uploadImage, deleteImage } from '../lib/storage';
 import { run } from '../lib/groceryEngine';
@@ -169,15 +169,20 @@ export const deleteMeal = asyncHandler(async (req: AuthedRequest, res: Response)
   res.status(204).send();
 });
 
-/** PATCH /api/meals/:id/favorite — bascule le statut favori. */
+/**
+ * PATCH /api/meals/:id/favorite — bascule le statut favori.
+ * Accepte un body optionnel `{ isFavorite }` (valeur absolue, utilisée par la
+ * synchronisation offline) ; sans body, bascule comme auparavant.
+ */
 export const toggleFavorite = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const id = req.params.id;
   const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const { isFavorite } = favoriteSchema.parse(req.body ?? {});
   const meal = await prisma.meal.findFirst({ where: { id, familyId } });
   if (!meal) throw new HttpError(404, 'Repas introuvable');
   const updated = await prisma.meal.update({
     where: { id },
-    data: { isFavorite: !meal.isFavorite },
+    data: { isFavorite: isFavorite ?? !meal.isFavorite },
   });
   res.json(updated);
 });

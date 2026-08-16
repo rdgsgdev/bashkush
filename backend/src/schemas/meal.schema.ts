@@ -66,3 +66,9 @@ export type CreateMealInput = z.infer<typeof createMealSchema>;
 // ── Schéma de mise à jour (tous les champs optionnels) ──────
 export const updateMealSchema = createMealSchema.partial();
 export type UpdateMealInput = z.infer<typeof updateMealSchema>;
+
+// Body optionnel de PATCH /meals/:id/favorite — valeur absolue pour un rejeu
+// offline déterministe (sans body → bascule, comportement historique conservé).
+export const favoriteSchema = z.object({
+  isFavorite: z.boolean().optional(),
+});

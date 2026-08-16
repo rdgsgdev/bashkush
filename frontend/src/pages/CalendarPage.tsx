@@ -89,7 +89,7 @@ export function CalendarPage() {
 
           {dayPlans.isLoading ? (
             <FullScreenLoader />
-          ) : dayPlans.isError ? (
+          ) : dayPlans.isError && !dayPlans.data ? (
             <ErrorState />
           ) : (dayPlans.data?.length ?? 0) === 0 ? (
             <div className="rounded-2xl bg-white p-4 shadow-card">

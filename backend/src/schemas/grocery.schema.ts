@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const createGroceryItemSchema = z.object({
+  // Id optionnel généré par le client : rend le rejeu de la file offline idempotent.
+  id: z.string().uuid().optional(),
   name: z.string().min(1),
   quantity: z.number().optional().default(1),
   unit: z.string().min(1),
@@ -18,6 +20,12 @@ export const updateGroceryItemSchema = z.object({
   checked: z.boolean().optional(),
 });
 export type UpdateGroceryItemInput = z.infer<typeof updateGroceryItemSchema>;
+
+// Body optionnel de PATCH /grocery-items/:id/check — valeur absolue pour un rejeu
+// offline déterministe (sans body → bascule, comportement historique conservé).
+export const checkItemSchema = z.object({
+  checked: z.boolean().optional(),
+});
 
 export const archiveSchema = z.object({
   mode: z.enum(['checked', 'all']),

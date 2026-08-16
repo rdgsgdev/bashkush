@@ -122,7 +122,7 @@ export function GroceryListPage() {
 
             {active.isLoading ? (
               <FullScreenLoader />
-            ) : active.isError ? (
+            ) : active.isError && !active.data ? (
               <ErrorState />
             ) : groups.length === 0 ? (
               <EmptyState
@@ -166,7 +166,7 @@ export function GroceryListPage() {
           <>
             {archived.isLoading ? (
               <FullScreenLoader />
-            ) : archived.isError ? (
+            ) : archived.isError && !archived.data ? (
               <ErrorState />
             ) : (archived.data?.items.length ?? 0) === 0 ? (
               <EmptyState

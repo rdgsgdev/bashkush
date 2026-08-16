@@ -12,6 +12,7 @@ import {
   useUploadMealImage,
 } from '../../api/meals';
 import { fetchIngredientNutrition } from '../../api/ai';
+import { useConnection } from '../../hooks/useConnection';
 import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS, AISLE_OPTIONS_LIST, UNIT_OPTIONS } from '../../lib/options';
 import {
   computeMealNutrition,
@@ -123,6 +124,10 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
   const updateMeal = useUpdateMeal();
   const deleteMeal = useDeleteMeal();
   const uploadImage = useUploadMealImage();
+
+  // L'upload d'image passe par Supabase Storage : connexion requise.
+  const { status } = useConnection();
+  const offline = status !== 'online';
 
   // (Ré)initialise l'état quand la modale s'ouvre ou change de repas.
   useEffect(() => {
@@ -448,10 +453,18 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
           </div>
           <div>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
-            <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
+            <Button
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={offline}
+            >
               <ImageIcon className="h-4 w-4" /> {imagePreview ? 'Changer la photo' : 'Ajouter une photo'}
             </Button>
-            {pendingImage && <p className="mt-1 text-xs text-stone-400">Photo prête à envoyer.</p>}
+            <p className="mt-1 text-xs text-stone-400">
+              {offline
+                ? 'Photo indisponible hors ligne (connexion requise).'
+                : pendingImage && 'Photo prête à envoyer.'}
+            </p>
           </div>
         </div>
 

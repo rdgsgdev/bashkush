@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
+import { markApiReachable, markApiUnreachable } from '../offline/connection';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -17,6 +18,22 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+// Suit la joignabilité du serveur : toute réponse réussie repasse « online »,
+// toute erreur sans réponse (timeout/réseau) déclenche la sonde santé
+// (réveil du serveur Render + rejeu de la file offline quand il répond).
+api.interceptors.response.use(
+  (response) => {
+    markApiReachable();
+    return response;
+  },
+  (error) => {
+    if (axios.isAxiosError(error) && !error.response) {
+      markApiUnreachable();
+    }
+    return Promise.reject(error);
+  },
+);
 
 // En dev, avertir si l'URL backend n'est pas configurée.
 if (!import.meta.env.VITE_API_URL && import.meta.env.DEV) {
