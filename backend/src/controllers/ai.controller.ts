@@ -11,10 +11,11 @@ import { AuthedRequest } from '../middleware/auth';
 import { ensureFamilyId } from '../lib/family';
 import { computeDailyTargets } from '../lib/nutrition';
 import { slugify } from '../lib/id';
-import { perplexityChatJSON } from '../lib/perplexity';
+import { perplexityChatJSON, fetchIngredientNutritionFromSonar } from '../lib/perplexity';
 import {
   generateMealRequestSchema,
   GenerateMealRequest,
+  ingredientNutritionQuerySchema,
 } from '../schemas/ai.schema';
 import { difficultyEnum, categoryEnum, CreateMealInput } from '../schemas/meal.schema';
 import type { Response } from 'express';
@@ -81,7 +82,12 @@ const mealJsonSchema = {
     'difficulty', 'category', 'nutrition', 'notes', 'ingredients', 'steps',
   ],
   properties: {
-    name: { type: 'string', description: 'Nom du plat, court et appétissant' },
+    name: {
+      type: 'string',
+      description:
+        'Nom de plat original, comme sur une carte de restaurant — très court (2 à 4 mots, ex : « Le marin croquant »), ' +
+        'évoquant la composition ; sans type générique du plat (« Bol », « Salade »…) ni liste d’ingrédients',
+    },
     description: { type: 'string', description: 'Description en 1-2 phrases (peut être vide)' },
     servings: { type: 'integer', description: 'Nombre de portions total de la recette' },
     prepTime: { type: 'integer', description: 'Temps de préparation en minutes (0 si inconnu)' },
@@ -109,7 +115,7 @@ const mealJsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'quantity', 'unit', 'aisle', 'optional', 'notes'],
+        required: ['name', 'quantity', 'unit', 'aisle', 'optional', 'notes', 'nutrition'],
         properties: {
           name: { type: 'string', description: 'Nom de l’ingrédient en français' },
           quantity: { type: 'number', description: 'Quantité totale pour toutes les portions' },
@@ -117,6 +123,19 @@ const mealJsonSchema = {
           aisle: { type: 'string', enum: [...AISLES], description: 'Rayon d’épicerie' },
           optional: { type: 'boolean' },
           notes: { type: 'string', description: 'Précision (peut être vide)' },
+          nutrition: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
+            description: 'Apports TOTAUX de cet ingrédient pour la quantité indiquée (toutes portions)',
+            properties: {
+              calories: { type: 'number', description: 'kcal totaux de l’ingrédient' },
+              protein: { type: 'number', description: 'grammes de protéines totaux' },
+              carbs: { type: 'number', description: 'grammes de glucides totaux' },
+              fat: { type: 'number', description: 'grammes de lipides totaux' },
+              fiber: { type: 'number', description: 'grammes de fibres totaux' },
+            },
+          },
         },
       },
     },
@@ -165,6 +184,17 @@ const aiMealResponseSchema = z.object({
         aisle: z.string().trim().min(1).max(60),
         optional: z.boolean(),
         notes: z.string().max(300),
+        // Apports totaux de l'ingrédient pour sa quantité (optionnel :
+        // tolérant si l'IA omet, bien que le schéma strict les exige).
+        nutrition: z
+          .object({
+            calories: z.number().nonnegative(),
+            protein: z.number().nonnegative(),
+            carbs: z.number().nonnegative(),
+            fat: z.number().nonnegative(),
+            fiber: z.number().nonnegative(),
+          })
+          .optional(),
       }),
     )
     .min(1),
@@ -232,12 +262,14 @@ Règles impératives :
 - Réponds UNIQUEMENT avec un objet JSON conforme au schéma fourni, sans texte autour.
 - Toutes les quantités d'ingrédients sont pour le nombre TOTAL de portions demandé.
 - Les apports nutritionnels (nutrition) sont PAR PORTION, avec des valeurs réalistes et cohérentes avec les ingrédients.
+- Pour CHAQUE ingrédient, renseigne ses apports TOTAUX (nutrition de l'ingrédient) pour la quantité indiquée : la somme des apports de tous les ingrédients, divisée par le nombre de portions, doit correspondre aux apports par portion du plat.
 - Les temps sont en minutes ; totalTime = prepTime + cookTime.
 - Les unités doivent être choisies parmi : ${UNITS.join(', ')}.
 - Le rayon (aisle) de chaque ingrédient doit être choisi parmi : ${AISLES.join(', ')}.
 - Les étapes sont numérotées à partir de 1, claires et complètes (températures, quantités).
 - NE JAMAIS inclure un ingrédient auquel un membre est allergique ; adapte la recette en conséquence.
 - Les quantités doivent permettre à chaque membre de s'approcher de ses objectifs caloriques et protéiques pour sa part des portions.
+- Convention de nommage : le nom est un nom de plat original, comme sur la carte d'un restaurant — très court (2 à 4 mots, article possible), ex : « Le marin croquant », « Aurore méditerranéenne », « Braise du sud-ouest ». Il évoque la composition du plat en lien direct ou indirect (ingrédient phare, origine culinaire, couleur, saison, ambiance). INTERDIT : mentionner le type ou le format générique du plat (« Bol », « Salade », « Curry », « Wrap », « Smoothie »…) et lister les ingrédients (ex : « Bol quinoa poulet avocat »).
 - Les noms, ingrédients et instructions sont en français.`;
 
 function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): string {
@@ -261,10 +293,13 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 
   if (request.previousMeal && request.feedback) {
     sections.push(
-      `Plat précédemment généré (JSON) :\n${JSON.stringify(request.previousMeal, null, 2)}\n\n` +
+      `Plat actuel à modifier (JSON) :\n${JSON.stringify(request.previousMeal, null, 2)}\n\n` +
         `L'utilisateur demande la modification suivante : « ${request.feedback} »\n` +
         `Régénère le plat complet (même format JSON) en appliquant cette consigne, ` +
-        `en conservant les éléments qui ne sont pas concernés par la modification.`,
+        `en conservant les éléments qui ne sont pas concernés par la modification.\n` +
+        `ATTENTION : le nom ne fait pas partie des éléments à conserver tel quel — ` +
+        `régénère-le selon la convention de nommage (nom original de restaurant, très court, ` +
+        `sans type générique), en accord avec la composition modifiée du plat.`,
     );
   }
 
@@ -288,6 +323,9 @@ function normalizeMeal(ai: z.infer<typeof aiMealResponseSchema>, servings: numbe
       aisle: ing.aisle,
       optional: ing.optional,
       notes: ing.notes.trim() || null,
+      // Apports de l'ingrédient pour sa quantité — sert au recalcul
+      // des apports par portion du plat quand les quantités évoluent.
+      nutrition: ing.nutrition ? { ...ing.nutrition, quantity: ing.quantity } : undefined,
     };
   });
 
@@ -347,4 +385,17 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
   }
 
   res.json({ meal: normalizeMeal(parsed.data, request.servings) });
+});
+
+// ── Complétion des apports d'un ingrédient (ajout manuel) ────
+
+/**
+ * POST /api/ai/ingredient-nutrition — apports d'un ingrédient pour une
+ * quantité donnée, complétés par Sonar. Utilisé par la modale d'édition
+ * d'un plat lors de l'ajout/modification manuelle d'un ingrédient.
+ */
+export const getIngredientNutrition = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const { name, quantity, unit } = ingredientNutritionQuerySchema.parse(req.body);
+  const nutrition = await fetchIngredientNutritionFromSonar(name, quantity, unit);
+  res.json({ nutrition });
 });

@@ -4,7 +4,7 @@ import { Header } from '../components/layout/Header';
 import { MealCard } from '../components/meals/MealCard';
 import { MealEditionModal } from '../components/modals/MealEditionModal';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
-import { MealAddChoiceModal } from '../components/modals/MealAddChoiceModal';
+import { MealModeChoiceModal } from '../components/modals/MealModeChoiceModal';
 import { MealAIGenerationModal } from '../components/modals/MealAIGenerationModal';
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
@@ -19,16 +19,31 @@ export function MealsPage() {
   const isChoosing = mealParam === 'new';
   const isCreatingManually = mealParam === 'manual';
   const isGeneratingWithAI = mealParam === 'ai';
+  // Modale de modification IA : ?mealai=<id>.
+  const aiEditParam = params.get('mealai');
+  const editingAiMeal = meals?.find((m) => m.id === aiEditParam) ?? null;
+  const isEditingWithAI = Boolean(editingAiMeal);
+  // Modale de choix d'édition : ?editchoice=<id>.
+  const editChoiceParam = params.get('editchoice');
+  const isChoosingEdit = Boolean(editChoiceParam);
   const editingMeal =
     !isChoosing && !isCreatingManually && !isGeneratingWithAI
       ? (meals?.find((m) => m.id === mealParam) ?? null)
       : null;
   const closeModal = () => {
     params.delete('meal');
+    params.delete('editchoice');
+    params.delete('mealai');
     setParams(params, { replace: true });
   };
   const chooseAddMode = (mode: 'ai' | 'manual') => {
     params.set('meal', mode);
+    setParams(params, { replace: true });
+  };
+  const chooseEditMode = (mode: 'ai' | 'manual') => {
+    if (!editChoiceParam) return;
+    params.delete('editchoice');
+    params.set(mode === 'ai' ? 'mealai' : 'meal', editChoiceParam);
     setParams(params, { replace: true });
   };
 
@@ -42,7 +57,7 @@ export function MealsPage() {
   };
   const editMeal = (mealId: string) => {
     params.delete('details');
-    params.set('meal', mealId);
+    params.set('editchoice', mealId);
     setParams(params, { replace: true });
   };
 
@@ -96,12 +111,24 @@ export function MealsPage() {
       />
 
       {/* ?meal=new → choix du mode d'ajout (IA ou manuel). */}
-      <MealAddChoiceModal open={isChoosing} onClose={closeModal} onChoose={chooseAddMode} />
+      <MealModeChoiceModal open={isChoosing} onClose={closeModal} onChoose={chooseAddMode} />
 
-      {/* ?meal=ai → génération d'un plat par IA. */}
-      <MealAIGenerationModal open={isGeneratingWithAI} onClose={closeModal} />
+      {/* ?editchoice=<id> → choix du mode de modification (IA ou manuel). */}
+      <MealModeChoiceModal
+        open={isChoosingEdit}
+        onClose={closeModal}
+        onChoose={chooseEditMode}
+        variant="edit"
+      />
 
-      {/* ?meal=manual (création) ou ?meal=<id> (modification). */}
+      {/* ?meal=ai (génération) ou ?mealai=<id> (modification IA). */}
+      <MealAIGenerationModal
+        open={isGeneratingWithAI || isEditingWithAI}
+        onClose={closeModal}
+        meal={isEditingWithAI ? editingAiMeal : null}
+      />
+
+      {/* ?meal=manual (création) ou ?meal=<id> (modification manuelle). */}
       <MealEditionModal
         meal={isCreatingManually ? null : editingMeal}
         open={isCreatingManually || Boolean(editingMeal)}

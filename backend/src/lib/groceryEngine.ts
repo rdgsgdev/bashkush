@@ -39,6 +39,12 @@ const normalize = (s: string) =>
 const itemKey = (name: string, unit: string, aisle: string) =>
   `${normalize(name)}\u0000${normalize(unit)}\u0000${normalize(aisle)}`;
 
+/**
+ * Sélection d'ingrédients choisie par l'utilisateur (modale de planification,
+ * étape 2) : quantité finale par id d'ingrédient, déjà mise à l'échelle.
+ */
+export type IngredientSelections = Array<{ id: string; quantity: number }>;
+
 /** Crée le plan + ajoute les contributions de ses ingrédients (transaction). */
 export async function planMeal(
   tx: Tx,
@@ -49,9 +55,11 @@ export async function planMeal(
     toDate: Date;
     servings: number;
     status: string;
+    /** Si fourni, seuls ces ingrédients sont ajoutés, avec ces quantités. */
+    ingredientSelections?: IngredientSelections;
   },
 ): Promise<MealPlan> {
-  const { meal, familyId, fromDate, toDate, servings, status } = params;
+  const { meal, familyId, fromDate, toDate, servings, status, ingredientSelections } = params;
 
   const plan = await tx.mealPlan.create({
     data: { familyId, mealId: meal.id, fromDate, toDate, servings, status },
@@ -63,6 +71,7 @@ export async function planMeal(
     ingredients: meal.ingredients,
     planServings: servings,
     mealServings: meal.servings,
+    ingredientSelections,
   });
 
   return plan;
@@ -77,13 +86,27 @@ async function addContributions(
     ingredients: Ingredient[];
     planServings: number;
     mealServings: number;
+    /**
+     * Sélection utilisateur : si fournie, limite les ajouts à ces ingrédients
+     * avec ces quantités absolues (pas de mise à l'échelle). Sinon, tous les
+     * ingrédients sont ajoutés, mis à l'échelle selon les portions.
+     */
+    ingredientSelections?: IngredientSelections;
   },
 ): Promise<void> {
-  const { mealPlanId, familyId, ingredients, planServings, mealServings } = args;
+  const { mealPlanId, familyId, ingredients, planServings, mealServings, ingredientSelections } = args;
 
   // Ingrédients mis à l'échelle (on ignore les quantités nulles).
+  const selectionQty = ingredientSelections
+    ? new Map(ingredientSelections.map((s) => [s.id, s.quantity]))
+    : undefined;
   const scaled = ingredients
-    .map((ing) => ({ ing, qty: scaleQuantity(ing.quantity, planServings, mealServings) }))
+    .map((ing) => ({
+      ing,
+      qty: selectionQty
+        ? (selectionQty.get(ing.id) ?? 0) // hors sélection → non ajouté
+        : scaleQuantity(ing.quantity, planServings, mealServings),
+    }))
     .filter((x) => x.qty > 0);
   if (scaled.length === 0) return;
 
@@ -212,6 +235,8 @@ export async function updateMealPlan(
     toDate?: Date;
     servings?: number;
     status?: string;
+    /** Si fourni, recalcule les contributions avec cette sélection utilisateur. */
+    ingredientSelections?: IngredientSelections;
   },
 ): Promise<MealPlan> {
   const servingsChanged = input.servings !== undefined && input.servings !== plan.servings;
@@ -240,6 +265,7 @@ export async function updateMealPlan(
       ingredients: meal.ingredients,
       planServings: input.servings ?? plan.servings,
       mealServings: meal.servings,
+      ingredientSelections: input.ingredientSelections,
     });
   }
 

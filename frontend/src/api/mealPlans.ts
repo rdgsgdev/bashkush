@@ -14,12 +14,22 @@ export async function fetchMealPlans(params: MealPlanListParams = {}): Promise<M
   return data;
 }
 
+/**
+ * Sélection d'ingrédients pour la liste de courses (étape 2 de la modale de
+ * planification) : quantités finales, déjà mises à l'échelle/ajustées.
+ */
+export interface IngredientSelection {
+  id: string;
+  quantity: number;
+}
+
 export async function createMealPlan(input: {
   mealId: string;
   fromDate: string;
   toDate: string;
   servings: number;
   status: MealPlanStatus;
+  ingredients?: IngredientSelection[];
 }): Promise<MealPlan> {
   const { data } = await api.post<MealPlan>('/meal-plans', input);
   return data;
@@ -27,7 +37,14 @@ export async function createMealPlan(input: {
 
 export async function updateMealPlan(
   id: string,
-  input: Partial<{ mealId: string; fromDate: string; toDate: string; servings: number; status: MealPlanStatus }>,
+  input: Partial<{
+    mealId: string;
+    fromDate: string;
+    toDate: string;
+    servings: number;
+    status: MealPlanStatus;
+    ingredients: IngredientSelection[];
+  }>,
 ): Promise<MealPlan> {
   const { data } = await api.put<MealPlan>(`/meal-plans/${id}`, input);
   return data;

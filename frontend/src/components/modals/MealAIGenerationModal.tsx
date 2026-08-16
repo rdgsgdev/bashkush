@@ -7,16 +7,18 @@ import { NumberStepper } from '../ui/NumberStepper';
 import { MealDetailsContent } from '../meals/MealDetailsContent';
 import { useFamilyMembers } from '../../api/family';
 import { useGenerateMeal, GenerateMealPayload } from '../../api/ai';
-import { useCreateMeal } from '../../api/meals';
+import { useCreateMeal, useUpdateMeal } from '../../api/meals';
 import { getApiErrorMessage } from '../../api/client';
 import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS } from '../../lib/options';
-import type { MealDraft, Difficulty, Category } from '../../types';
+import type { Meal, MealDraft, Difficulty, Category } from '../../types';
 import type { FamilyMemberProfileView } from '../../types/family';
 import { cn } from '../../lib/utils';
 
 interface MealAIGenerationModalProps {
   open: boolean;
   onClose: () => void;
+  /** Plat existant à modifier par IA (absent = création). */
+  meal?: Meal | null;
 }
 
 interface ChatMessage {
@@ -24,18 +26,108 @@ interface ChatMessage {
   text: string;
 }
 
+/** Convertit un plat persisté en brouillon exploitable par l'IA / le PUT. */
+function mealToDraft(meal: Meal): MealDraft {
+  return {
+    id: meal.id,
+    name: meal.name,
+    description: meal.description ?? '',
+    servings: meal.servings,
+    prepTime: meal.prepTime ?? undefined,
+    cookTime: meal.cookTime ?? undefined,
+    totalTime: meal.totalTime ?? undefined,
+    difficulty: meal.difficulty ?? undefined,
+    category: meal.category ?? undefined,
+    nutrition: meal.nutrition ?? undefined,
+    notes: meal.notes ?? '',
+    ingredients: meal.ingredients.map((i) => ({ ...i })),
+    steps: meal.steps.map((s) => ({ ...s })),
+  };
+}
+
+const memberInfo = (m: FamilyMemberProfileView) => {
+  const parts: string[] = [];
+  if (m.dailyCalories) parts.push(`≈ ${m.dailyCalories} kcal/jour`);
+  if (m.dailyProtein) parts.push(`≈ ${m.dailyProtein} g protéines/jour`);
+  if (m.allergies?.trim()) parts.push(`Allergies : ${m.allergies.trim()}`);
+  return parts.length ? parts.join(' · ') : 'Profil nutritionnel incomplet';
+};
+
+/** Cartes de sélection des membres (formulaire de génération + édition IA). */
+function MemberPicker({
+  members,
+  loading,
+  selectedIds,
+  onToggle,
+}: {
+  members: FamilyMemberProfileView[];
+  loading: boolean;
+  selectedIds: Set<string>;
+  onToggle: (userId: string) => void;
+}) {
+  return (
+    <Field label="Membres pris en compte">
+      {loading ? (
+        <p className="text-sm text-stone-400">Chargement des membres…</p>
+      ) : members.length === 0 ? (
+        <p className="text-sm text-stone-400">Aucun profil trouvé.</p>
+      ) : (
+        <div className="space-y-2">
+          {members.map((m) => {
+            const checked = selectedIds.has(m.userId);
+            return (
+              <button
+                key={m.userId}
+                type="button"
+                onClick={() => onToggle(m.userId)}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-2xl border-2 bg-white p-3 text-left transition',
+                  checked ? 'border-brand-400 bg-brand-50/50' : 'border-stone-200 hover:border-stone-300',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition',
+                    checked ? 'border-brand-500 bg-brand-500 text-white' : 'border-stone-300 text-transparent',
+                  )}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                {m.photoUrl ? (
+                  <img src={m.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                ) : null}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-stone-800">
+                    {m.fullName?.trim() || 'Membre'}
+                    {m.isSelf && <span className="ml-1.5 text-xs font-normal text-brand-600">(moi)</span>}
+                  </span>
+                  <span className="block truncate text-xs text-stone-500">{memberInfo(m)}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Field>
+  );
+}
+
 /**
- * Génération d'un plat par IA en deux temps :
- * 1. formulaire (membres, portions, contraintes optionnelles) ;
- * 2. plat généré en lecture seule + zone de chat pour affiner,
- *    puis « Enregistrer » pour l'ajouter à la liste des plats.
+ * Génération / modification d'un plat par IA :
+ * - création : 1. formulaire (membres, portions, contraintes optionnelles) ;
+ *   2. plat généré en lecture seule + chat pour affiner, puis « Enregistrer » ;
+ * - modification (`meal` fourni) : le plat existant est affiché d'emblée,
+ *   le chat décrit les modifications à appliquer, puis « Enregistrer les
+ *   modifications » remplace le plat via PUT.
  */
-export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalProps) {
+export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationModalProps) {
+  const isEdit = Boolean(meal);
   const { data: members, isLoading: membersLoading } = useFamilyMembers();
   const generate = useGenerateMeal();
   const createMeal = useCreateMeal();
+  const updateMeal = useUpdateMeal();
 
-  // ── Formulaire ────────────────────────────────────────────
+  // ── Formulaire (création) ─────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [servings, setServings] = useState(2);
   const [difficulty, setDifficulty] = useState<'' | Difficulty>('');
@@ -51,22 +143,33 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Réinitialise tout à chaque ouverture.
+  // Réinitialise tout à chaque ouverture (en édition : plat courant affiché).
   useEffect(() => {
     if (!open) return;
     setSelectedIds(new Set());
-    setServings(2);
+    setServings(meal?.servings ?? 2);
     setDifficulty('');
     setCategory('');
     setDesiredIngredients([]);
     setIngredientInput('');
     setDescription('');
-    setGenerated(null);
-    setChat([]);
+    setGenerated(meal ? mealToDraft(meal) : null);
+    setViewServings(meal?.servings ?? 2);
+    setChat(
+      meal
+        ? [
+            {
+              role: 'assistant',
+              text: 'Voici le plat actuel. Décris la modification souhaitée (ex : « remplacer la crème par du lait de coco »).',
+            },
+          ]
+        : [],
+    );
     setFeedback('');
     setError(null);
     generate.reset();
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, meal?.id]);
 
   // Par défaut : moi seul(e) sélectionné(e).
   useEffect(() => {
@@ -109,9 +212,9 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
     }
     setError(null);
     try {
-      const meal = await generate.mutateAsync(buildPayload());
-      setGenerated(meal);
-      setViewServings(meal.servings ?? servings);
+      const result = await generate.mutateAsync(buildPayload());
+      setGenerated(result);
+      setViewServings(result.servings ?? servings);
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -120,14 +223,24 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
   const handleSendFeedback = async () => {
     const text = feedback.trim();
     if (!text || !generated || generate.isPending) return;
+    if (selectedIds.size === 0) {
+      setError('Sélectionne au moins un membre');
+      return;
+    }
     setChat((prev) => [...prev, { role: 'user', text }]);
     setFeedback('');
     setError(null);
     try {
-      const meal = await generate.mutateAsync({ ...buildPayload(), previousMeal: generated, feedback: text });
-      setGenerated(meal);
-      setViewServings(meal.servings ?? servings);
-      setChat((prev) => [...prev, { role: 'assistant', text: 'Plat régénéré en tenant compte de ta demande.' }]);
+      const payload: GenerateMealPayload = isEdit
+        ? { memberIds: [...selectedIds], servings: meal!.servings, previousMeal: generated, feedback: text }
+        : { ...buildPayload(), previousMeal: generated, feedback: text };
+      const result = await generate.mutateAsync(payload);
+      setGenerated(result);
+      setViewServings(result.servings ?? servings);
+      setChat((prev) => [
+        ...prev,
+        { role: 'assistant', text: isEdit ? 'Plat modifié en tenant compte de ta demande.' : 'Plat régénéré en tenant compte de ta demande.' },
+      ]);
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -137,7 +250,12 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
     if (!generated) return;
     setError(null);
     try {
-      await createMeal.mutateAsync({ ...generated, id: undefined });
+      if (isEdit && meal) {
+        // PUT : remplace ingrédients/étapes, préserve image et favori.
+        await updateMeal.mutateAsync({ id: meal.id, draft: { ...generated, id: undefined } });
+      } else {
+        await createMeal.mutateAsync({ ...generated, id: undefined });
+      }
       onClose();
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -150,7 +268,11 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
     <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-600">{error}</div>
   );
 
-  // ── Phase 1 : formulaire ──────────────────────────────────
+  /** En édition, le plat existe d'emblée : phase résultat directe. */
+  const showResult = isEdit || Boolean(generated) || generate.isPending;
+  const saving = createMeal.isPending || updateMeal.isPending;
+
+  // ── Phase 1 : formulaire (création) ───────────────────────
   const formFooter = (
     <div className="flex items-center justify-end gap-2">
       <Button variant="secondary" onClick={onClose}>Annuler</Button>
@@ -160,62 +282,17 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
     </div>
   );
 
-  const memberInfo = (m: FamilyMemberProfileView) => {
-    const parts: string[] = [];
-    if (m.dailyCalories) parts.push(`≈ ${m.dailyCalories} kcal/jour`);
-    if (m.dailyProtein) parts.push(`≈ ${m.dailyProtein} g protéines/jour`);
-    if (m.allergies?.trim()) parts.push(`Allergies : ${m.allergies.trim()}`);
-    return parts.length ? parts.join(' · ') : 'Profil nutritionnel incomplet';
-  };
-
   const formBody = (
     <div className="space-y-4">
       {errorBanner}
 
       {/* Membres de la famille */}
-      <Field label="Membres pris en compte">
-        {membersLoading ? (
-          <p className="text-sm text-stone-400">Chargement des membres…</p>
-        ) : (members?.length ?? 0) === 0 ? (
-          <p className="text-sm text-stone-400">Aucun profil trouvé.</p>
-        ) : (
-          <div className="space-y-2">
-            {members!.map((m) => {
-              const checked = selectedIds.has(m.userId);
-              return (
-                <button
-                  key={m.userId}
-                  type="button"
-                  onClick={() => toggleMember(m.userId)}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-2xl border-2 bg-white p-3 text-left transition',
-                    checked ? 'border-brand-400 bg-brand-50/50' : 'border-stone-200 hover:border-stone-300',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition',
-                      checked ? 'border-brand-500 bg-brand-500 text-white' : 'border-stone-300 text-transparent',
-                    )}
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </span>
-                  {m.photoUrl ? (
-                    <img src={m.photoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-                  ) : null}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-stone-800">
-                      {m.fullName?.trim() || 'Membre'}
-                      {m.isSelf && <span className="ml-1.5 text-xs font-normal text-brand-600">(moi)</span>}
-                    </span>
-                    <span className="block truncate text-xs text-stone-500">{memberInfo(m)}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Field>
+      <MemberPicker
+        members={members ?? []}
+        loading={membersLoading}
+        selectedIds={selectedIds}
+        onToggle={toggleMember}
+      />
 
       {/* Portions */}
       <div className="rounded-2xl bg-brand-50 px-4 py-3">
@@ -303,7 +380,7 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
     </div>
   );
 
-  // ── Phase 2 : plat généré + chat ──────────────────────────
+  // ── Phase 2 : plat (généré ou à modifier) + chat ──────────
   const resultFooter = (
     <div className="space-y-2">
       {chat.length > 0 && (
@@ -333,7 +410,7 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
               handleSendFeedback();
             }
           }}
-          placeholder="Ex : plus de protéines, sans lactose…"
+          placeholder={isEdit ? 'Ex : remplacer la crème par du lait de coco…' : 'Ex : plus de protéines, sans lactose…'}
           disabled={generate.isPending}
           maxLength={1000}
         />
@@ -347,13 +424,13 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
           <Send className="h-4 w-4" />
         </Button>
       </div>
-      <Button className="w-full" onClick={handleSave} loading={createMeal.isPending} disabled={!generated}>
-        <Save className="h-4 w-4" /> Enregistrer le plat
+      <Button className="w-full" onClick={handleSave} loading={saving} disabled={!generated}>
+        <Save className="h-4 w-4" /> {isEdit ? 'Enregistrer les modifications' : 'Enregistrer le plat'}
       </Button>
     </div>
   );
 
-  const resultBody = generate.isPending && !generated ? (
+  const resultBody = !isEdit && generate.isPending && !generated ? (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
       <Sparkles className="h-8 w-8 animate-pulse text-brand-500" />
       <p className="text-sm font-semibold text-stone-700">Génération du plat en cours…</p>
@@ -364,8 +441,16 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
       {errorBanner}
       {generate.isPending && (
         <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
-          <Sparkles className="h-4 w-4 animate-pulse" /> Régénération en cours…
+          <Sparkles className="h-4 w-4 animate-pulse" /> {isEdit ? 'Modification du plat en cours…' : 'Régénération en cours…'}
         </div>
+      )}
+      {isEdit && (
+        <MemberPicker
+          members={members ?? []}
+          loading={membersLoading}
+          selectedIds={selectedIds}
+          onToggle={toggleMember}
+        />
       )}
       <MealDetailsContent meal={generated} servings={viewServings} onServingsChange={setViewServings} maxServings={50} />
     </div>
@@ -380,10 +465,10 @@ export function MealAIGenerationModal({ open, onClose }: MealAIGenerationModalPr
     <Modal
       open={open}
       onClose={onClose}
-      title={generated ? 'Plat généré' : 'Générer avec IA'}
-      footer={generated || generate.isPending ? resultFooter : formFooter}
+      title={isEdit ? 'Modifier avec l’IA' : generated ? 'Plat généré' : 'Générer avec IA'}
+      footer={showResult ? resultFooter : formFooter}
     >
-      {generated || generate.isPending ? resultBody : formBody}
+      {showResult ? resultBody : formBody}
     </Modal>
   );
 }

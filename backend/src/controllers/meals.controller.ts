@@ -35,7 +35,42 @@ export const getMeal = asyncHandler(async (req: AuthedRequest, res: Response) =>
   res.json(meal);
 });
 
-function buildMealData(input: CreateMealInput | UpdateMealInput) {
+const NUTRITION_KEYS = ['calories', 'protein', 'carbs', 'fat', 'fiber'] as const;
+
+/**
+ * Apports par portion du plat, calculés depuis les apports portés par les
+ * ingrédients (import JSON/IA ou saisie manuelle). Retourne null si aucun
+ * ingrédient n'a de données — on garde alors la nutrition fournie (legacy).
+ * Les apports d'un ingrédient sont donnés pour `nutrition.quantity` unités
+ * (défaut : sa quantité) et mis à l'échelle proportionnellement.
+ */
+function computePerPortionNutrition(
+  ingredients: CreateMealInput['ingredients'] | undefined,
+  servings: number,
+): Record<string, number> | null {
+  if (!ingredients || ingredients.length === 0) return null;
+  const totals: Record<string, number> = {};
+  for (const ing of ingredients) {
+    const n = ing.nutrition;
+    if (!n) continue;
+    const ref = typeof n.quantity === 'number' && n.quantity > 0 ? n.quantity : ing.quantity;
+    if (!(ref > 0) || !(ing.quantity >= 0)) continue;
+    const factor = ing.quantity / ref;
+    for (const key of NUTRITION_KEYS) {
+      const v = n[key];
+      if (typeof v === 'number' && v >= 0) totals[key] = (totals[key] ?? 0) + v * factor;
+    }
+  }
+  if (Object.keys(totals).length === 0) return null;
+  const portions = servings > 0 ? servings : 1;
+  const perPortion: Record<string, number> = {};
+  for (const [key, total] of Object.entries(totals)) {
+    perPortion[key] = key === 'calories' ? Math.round(total / portions) : Math.round((total / portions) * 10) / 10;
+  }
+  return perPortion;
+}
+
+function buildMealData(input: CreateMealInput | UpdateMealInput, fallbackServings?: number) {
   const data: any = {};
   if (input.name !== undefined) data.name = input.name;
   if (input.description !== undefined) data.description = input.description;
@@ -57,8 +92,16 @@ function buildMealData(input: CreateMealInput | UpdateMealInput) {
         aisle: i.aisle,
         optional: i.optional,
         notes: i.notes,
+        nutrition: (i.nutrition ?? null) as any,
       })),
     };
+    // Dès qu'un ingrédient porte des apports, ils deviennent la source de
+    // vérité : les apports par portion du plat sont recalculés.
+    const computed = computePerPortionNutrition(
+      input.ingredients,
+      data.servings ?? fallbackServings ?? 2,
+    );
+    if (computed) data.nutrition = computed;
   }
   if (input.steps !== undefined) {
     data.steps = {
@@ -108,7 +151,7 @@ export const updateMeal = asyncHandler(async (req: AuthedRequest, res: Response)
       await tx.step.deleteMany({ where: { mealId: id } });
     }
 
-    return tx.meal.update({ where: { id }, data: buildMealData(input), include: mealInclude });
+    return tx.meal.update({ where: { id }, data: buildMealData(input, existing.servings), include: mealInclude });
   });
 
   res.json(meal);

@@ -8,6 +8,7 @@ import {
   updateMealPlanSchema,
   updateStatusSchema,
 } from '../schemas/mealPlan.schema';
+import type { Ingredient, Meal } from '@prisma/client';
 import type { Response } from 'express';
 
 const planInclude = {
@@ -17,7 +18,19 @@ const planInclude = {
       steps: { orderBy: { stepNumber: 'asc' as const } },
     },
   },
+  // Sélections précédentes du plan (mémoire de l'étape ingrédients en édition).
+  contributions: { select: { ingredientId: true, quantity: true } },
 } as const;
+
+/** Vérifie que chaque id de sélection appartient bien au plat ciblé. */
+function assertIngredientsBelongToMeal(selections: { id: string }[], mealIngredients: Ingredient[]) {
+  const known = new Set(mealIngredients.map((i) => i.id));
+  for (const s of selections) {
+    if (!known.has(s.id)) {
+      throw new HttpError(400, 'Ingrédient inconnu pour ce plat');
+    }
+  }
+}
 
 /**
  * Récupère les plans de la famille.
@@ -68,6 +81,8 @@ export const createMealPlan = asyncHandler(async (req: AuthedRequest, res: Respo
   });
   if (!meal) throw new HttpError(404, 'Repas introuvable');
 
+  if (input.ingredients) assertIngredientsBelongToMeal(input.ingredients, meal.ingredients);
+
   const plan = await run(prisma, (tx) =>
     planMeal(tx, {
       meal,
@@ -76,6 +91,7 @@ export const createMealPlan = asyncHandler(async (req: AuthedRequest, res: Respo
       toDate: input.toDate,
       servings: input.servings,
       status: input.status,
+      ingredientSelections: input.ingredients,
     }),
   );
 
@@ -99,12 +115,22 @@ export const updateMealPlanCtrl = asyncHandler(async (req: AuthedRequest, res: R
   if (!plan) throw new HttpError(404, 'Plan introuvable');
 
   // Un changement de plat ne peut cibler qu'un plat de la même famille.
+  let targetMeal: (Meal & { ingredients: Ingredient[] }) | null = null;
   if (input.mealId !== undefined && input.mealId !== plan.mealId) {
-    const target = await prisma.meal.findFirst({ where: { id: input.mealId, familyId } });
-    if (!target) throw new HttpError(404, 'Repas introuvable');
+    targetMeal = await prisma.meal.findFirst({
+      where: { id: input.mealId, familyId },
+      include: { ingredients: true },
+    });
+    if (!targetMeal) throw new HttpError(404, 'Repas introuvable');
   }
 
-  await run(prisma, (tx) => updateMealPlan(tx, plan, input));
+  if (input.ingredients) {
+    assertIngredientsBelongToMeal(input.ingredients, (targetMeal ?? plan.meal).ingredients);
+  }
+
+  await run(prisma, (tx) =>
+    updateMealPlan(tx, plan, { ...input, ingredientSelections: input.ingredients }),
+  );
 
   const result = await prisma.mealPlan.findUniqueOrThrow({ where: { id }, include: planInclude });
   res.json(result);

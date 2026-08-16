@@ -123,3 +123,68 @@ export async function perplexityChatJSON<T>({
 
   return JSON.parse(extractJSON(content)) as T;
 }
+
+// ── Complétion des apports d'un ingrédient (ajout manuel) ────
+
+/** Apports d'un ingrédient pour une quantité donnée (valeurs totales, pas par portion). */
+export interface SonarNutrition {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+}
+
+const ingredientNutritionJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
+  properties: {
+    calories: { type: 'number', description: 'kcal totaux pour la quantité demandée' },
+    protein: { type: 'number', description: 'grammes de protéines totaux' },
+    carbs: { type: 'number', description: 'grammes de glucides totaux' },
+    fat: { type: 'number', description: 'grammes de lipides totaux' },
+    fiber: { type: 'number', description: 'grammes de fibres totaux' },
+  },
+} as const;
+
+/**
+ * Interroge Sonar pour obtenir les apports d'un ingrédient pour une quantité
+ * donnée. Retourne les valeurs TOTALES pour cette quantité (à stocker telles
+ * quelles, avec la quantité courante comme référence).
+ */
+export async function fetchIngredientNutritionFromSonar(
+  name: string,
+  quantity: number,
+  unit: string,
+): Promise<SonarNutrition> {
+  const result = await perplexityChatJSON<{
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+  }>({
+    system: [
+      'Tu es une base de données nutritionnelle (type table Ciqual).',
+      'Pour l’ingrédient et la quantité exactement demandés, renvoie les apports TOTAUX',
+      '(kcal et grammes) pour cette quantité, avec des valeurs moyennes fiables pour',
+      "l'aliment cru non préparé. Si la quantité est en volume ou en unités (pièce,",
+      'c. à soupe…), estime la masse équivalente. Si tu ne connais pas l’aliment,',
+      'renvoie des valeurs nulles (0).',
+    ].join(' '),
+    user: `Ingrédient : « ${name} » — quantité : ${quantity} ${unit}.`,
+    schemaName: 'ingredient_nutrition',
+    jsonSchema: ingredientNutritionJsonSchema as unknown as Record<string, unknown>,
+  });
+
+  // Valeurs forcément positives (0 si l'IA renvoie du bruit négatif).
+  const round1 = (v: number) => Math.round(Math.max(0, v) * 10) / 10;
+  return {
+    calories: Math.round(Math.max(0, result.calories)),
+    protein: round1(result.protein),
+    carbs: round1(result.carbs),
+    fat: round1(result.fat),
+    fiber: round1(result.fiber),
+  };
+}

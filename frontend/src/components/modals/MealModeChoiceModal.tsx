@@ -2,36 +2,51 @@ import { PenLine, Sparkles } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { cn } from '../../lib/utils';
 
-interface MealAddChoiceModalProps {
+interface MealModeChoiceModalProps {
   open: boolean;
   onClose: () => void;
-  /** 'ai' → modale de génération IA, 'manual' → modale d'ajout manuelle. */
+  /** 'ai' → modale IA (génération ou modification), 'manual' → modale manuelle. */
   onChoose: (mode: 'ai' | 'manual') => void;
+  /** 'add' → création d'un plat, 'edit' → modification d'un plat existant. */
+  variant?: 'add' | 'edit';
 }
 
-/** Première étape de l'ajout d'un plat : génération IA ou ajout manuel. */
-export function MealAddChoiceModal({ open, onClose, onChoose }: MealAddChoiceModalProps) {
+/**
+ * Première étape de l'ajout ou de la modification d'un plat :
+ * avec l'IA ou manuellement.
+ */
+export function MealModeChoiceModal({
+  open,
+  onClose,
+  onChoose,
+  variant = 'add',
+}: MealModeChoiceModalProps) {
+  const isEdit = variant === 'edit';
   const options = [
     {
       mode: 'ai' as const,
       icon: Sparkles,
-      title: 'Générer avec IA',
-      description: 'Un plat sur mesure, adapté aux profils nutritionnels des membres sélectionnés.',
+      title: isEdit ? 'Avec l’IA' : 'Générer avec IA',
+      description: isEdit
+        ? 'Décris les modifications à apporter (ingrédients, étapes…) : l’IA régénère le plat en tenant compte des profils sélectionnés.'
+        : 'Un plat sur mesure, adapté aux profils nutritionnels des membres sélectionnés.',
       accent: 'border-brand-200 hover:border-brand-400 hover:bg-brand-50/50',
       iconColor: 'bg-brand-100 text-brand-600',
     },
     {
       mode: 'manual' as const,
       icon: PenLine,
-      title: 'Ajouter manuellement',
-      description: 'Crée le plat vous-même (comportement habituel) ou importez un JSON.',
+      title: isEdit ? 'Manuellement' : 'Ajouter manuellement',
+      description: isEdit
+        ? 'Modifie le plat vous-même (comportement habituel) ou importez un JSON.'
+        : 'Crée le plat vous-même (comportement habituel) ou importez un JSON.',
       accent: 'border-stone-200 hover:border-stone-400 hover:bg-stone-50',
       iconColor: 'bg-stone-100 text-stone-600',
     },
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title="Nouveau plat">
+    <Modal open={open} onClose={onClose} title={isEdit ? 'Modifier le plat' : 'Nouveau plat'}>
       <div className="space-y-3">
         {options.map(({ mode, icon: Icon, title, description, accent, iconColor }) => (
           <button

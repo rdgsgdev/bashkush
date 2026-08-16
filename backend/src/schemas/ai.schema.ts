@@ -25,3 +25,12 @@ export const generateMealRequestSchema = z.object({
   feedback: z.string().trim().min(1).max(1000).optional(),
 });
 export type GenerateMealRequest = z.infer<typeof generateMealRequestSchema>;
+
+// ── Complétion IA des apports d'un ingrédient (Sonar) ────────
+
+export const ingredientNutritionQuerySchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  quantity: z.number().positive().max(100_000),
+  unit: z.string().trim().min(1).max(40),
+});
+export type IngredientNutritionQuery = z.infer<typeof ingredientNutritionQuerySchema>;

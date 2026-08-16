@@ -104,6 +104,40 @@ Ouvrez **http://localhost:5173** 🎉
 - **MealEditionModal** : import JSON, photo, favori, ingrédients/étapes éditables, **quantités dynamiques selon le nombre de portions**.
 - **MealPlanningModal** : carrousel de plats, plage de dates (du/au), portions (1–10), statut → **génère automatiquement la liste de courses**.
 
+### Import JSON généré par une IA
+
+Les plats peuvent être générés par une IA externe (ChatGPT, etc.) puis importés via « Importer un JSON ». Pour que les **apports par portion** du plat suivent les quantités (ex. passer de 4 à 3 œufs), l'IA doit renseigner les apports **de chaque ingrédient** — pour la quantité indiquée :
+
+```json
+{
+  "name": "Omelette aux champignons",
+  "servings": 2,
+  "ingredients": [
+    {
+      "id": "oeufs", "name": "Œufs", "quantity": 4, "unit": "pièce", "aisle": "proteines",
+      "nutrition": { "calories": 280, "protein": 24, "fat": 20, "quantity": 4 }
+    },
+    {
+      "id": "champignons", "name": "Champignons", "quantity": 200, "unit": "g", "aisle": "fruits_legumes",
+      "nutrition": { "calories": 44, "protein": 6, "carbs": 6, "fiber": 3, "quantity": 200 }
+    }
+  ],
+  "steps": [{ "stepNumber": 1, "instruction": "Faire revenir les champignons, puis les œufs." }]
+}
+```
+
+- `nutrition.quantity` (optionnel) : quantité pour laquelle les valeurs sont données — par défaut, la `quantity` de l'ingrédient.
+- Les apports par ingrédient sont stockés **en arrière-plan** (non affichés dans le détail du plat) et restent modifiables dans la modale d'édition (bloc « Apports » replié de chaque ingrédient).
+- Les apports par portion du plat sont recalculés en continu dans la modale, puis côté backend à l'enregistrement : **Σ (apports d'un ingrédient × quantité actuelle ÷ quantité de référence) ÷ portions**. Les plats sans apports par ingrédient conservent leur nutrition globale existante.
+
+### Complétion automatique des apports (Sonar)
+
+Lors de l'**ajout manuel** d'un ingrédient (nom + quantité + unité renseignés), le backend interroge **Sonar** (Perplexity AI) et remplit automatiquement les apports de l'ingrédient — les champs restent modifiables à la main. Modifier le **nom**, la **quantité** ou l'**unité** re-questionne l'IA (après un délai de frappe) ; changer le **rayon** ou les notes n'a aucun effet. Requête : `POST /api/ai/ingredient-nutrition` `{ name, quantity, unit }`.
+
+> 💡 La **génération de plat par IA** (« Générer avec IA ») renseigne elle aussi les apports de chaque ingrédient en arrière-plan — les apports par portion du plat en découlent et suivent les quantités à l'édition.
+
+> ⚙️ Configuration : renseignez `PERPLEXITY_API_KEY` (et éventuellement `PERPLEXITY_MODEL`, défaut `sonar`) dans `backend/.env` — voir `.env.example`. Sans clé, la complétion échoue silencieusement et les champs restent saisissables manuellement.
+
 ---
 
 ## 🔐 Sécurité / secrets
