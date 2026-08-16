@@ -1,6 +1,7 @@
 import { PenLine, Sparkles } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { cn } from '../../lib/utils';
+import { useConnection } from '../../hooks/useConnection';
 
 interface MealModeChoiceModalProps {
   open: boolean;
@@ -22,6 +23,8 @@ export function MealModeChoiceModal({
   variant = 'add',
 }: MealModeChoiceModalProps) {
   const isEdit = variant === 'edit';
+  const { status } = useConnection();
+  const aiDisabled = status !== 'online';
   const options = [
     {
       mode: 'ai' as const,
@@ -48,25 +51,33 @@ export function MealModeChoiceModal({
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? 'Modifier le plat' : 'Nouveau plat'}>
       <div className="space-y-3">
-        {options.map(({ mode, icon: Icon, title, description, accent, iconColor }) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => onChoose(mode)}
-            className={cn(
-              'flex w-full items-center gap-4 rounded-2xl border-2 bg-white p-4 text-left shadow-card transition',
-              accent,
-            )}
-          >
-            <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', iconColor)}>
-              <Icon className="h-5 w-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-bold text-stone-800">{title}</span>
-              <span className="block text-xs leading-relaxed text-stone-500">{description}</span>
-            </span>
-          </button>
-        ))}
+        {options.map(({ mode, icon: Icon, title, description, accent, iconColor }) => {
+          const disabled = mode === 'ai' && aiDisabled;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => !disabled && onChoose(mode)}
+              disabled={disabled}
+              className={cn(
+                'flex w-full items-center gap-4 rounded-2xl border-2 bg-white p-4 text-left shadow-card transition',
+                accent,
+                disabled && 'cursor-not-allowed opacity-50 hover:border-inherit',
+              )}
+            >
+              <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', iconColor)}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-stone-800">{title}</span>
+                <span className="block text-xs leading-relaxed text-stone-500">
+                  {description}
+                  {disabled && ' — connexion requise.'}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </Modal>
   );

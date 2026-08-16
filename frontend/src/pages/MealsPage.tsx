@@ -76,7 +76,7 @@ export function MealsPage() {
       <main className="flex-1 space-y-3 p-4">
         {isLoading ? (
           <FullScreenLoader />
-        ) : isError ? (
+        ) : isError && !meals ? (
           <ErrorState />
         ) : (meals?.length ?? 0) === 0 ? (
           <EmptyState

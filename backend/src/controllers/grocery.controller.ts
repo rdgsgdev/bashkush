@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../prisma';
 import { asyncHandler, HttpError } from '../middleware/error';
 import { ensureFamilyId } from '../lib/family';
@@ -7,6 +8,7 @@ import {
   updateGroceryItemSchema,
   archiveSchema,
   unarchiveSchema,
+  checkItemSchema,
 } from '../schemas/grocery.schema';
 import type { Response } from 'express';
 
@@ -53,17 +55,29 @@ export const createGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
     create: { name: input.aisle, label: input.aisle, sortOrder: 999 },
   });
 
-  const item = await prisma.groceryItem.create({
-    data: {
-      familyId,
-      name: input.name,
-      quantity: input.quantity,
-      unit: input.unit,
-      aisle: input.aisle,
-      notes: input.notes,
-      isManual: true,
-    },
-  });
+  let item;
+  try {
+    item = await prisma.groceryItem.create({
+      data: {
+        // Id client optionnel : un rejeu de la file offline ne crée pas de doublon.
+        ...(input.id ? { id: input.id } : {}),
+        familyId,
+        name: input.name,
+        quantity: input.quantity,
+        unit: input.unit,
+        aisle: input.aisle,
+        notes: input.notes,
+        isManual: true,
+      },
+    });
+  } catch (err) {
+    // Conflit d'id (P2002) = action déjà rejouée : on renvoie l'item existant.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const existing = await prisma.groceryItem.findFirst({ where: { id: input.id, familyId } });
+      if (existing) return res.json(existing);
+    }
+    throw err;
+  }
   res.status(201).json(item);
 });
 
@@ -112,15 +126,20 @@ export const deleteGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
   res.status(204).send();
 });
 
-/** PATCH /api/grocery-items/:id/check — bascule l'état « acheté ». */
+/**
+ * PATCH /api/grocery-items/:id/check — bascule l'état « acheté ».
+ * Accepte un body optionnel `{ checked }` (valeur absolue, utilisée par la
+ * synchronisation offline) ; sans body, bascule comme auparavant.
+ */
 export const toggleCheck = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const id = req.params.id;
   const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const { checked } = checkItemSchema.parse(req.body ?? {});
   const existing = await prisma.groceryItem.findFirst({ where: { id, familyId } });
   if (!existing) throw new HttpError(404, 'Item introuvable');
   const item = await prisma.groceryItem.update({
     where: { id },
-    data: { checked: !existing.checked },
+    data: { checked: checked ?? !existing.checked },
   });
   res.json(item);
 });

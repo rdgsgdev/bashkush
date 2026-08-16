@@ -10,6 +10,7 @@ import {
   useAcceptFamilyInvitation,
   useDeclineFamilyInvitation,
 } from '../../api/family';
+import { useConnection } from '../../hooks/useConnection';
 import type { FamilyInvitationView, FamilyMemberView } from '../../types/family';
 
 /** Ligne d'un membre de la famille (avatar, nom/courriel, statut, retrait). */
@@ -23,12 +24,14 @@ function MemberRow({
   removing: boolean;
 }) {
   const initial = (member.fullName || member.email || '?').charAt(0).toUpperCase();
+  const [photoFailed, setPhotoFailed] = useState(false); // image absente du cache offline
   return (
     <li className="flex items-center gap-3 rounded-xl bg-stone-100 px-3 py-2.5">
-      {member.photoUrl ? (
+      {member.photoUrl && !photoFailed ? (
         <img
           src={member.photoUrl}
           alt={member.fullName || member.email || ''}
+          onError={() => setPhotoFailed(true)}
           className="h-9 w-9 shrink-0 rounded-full object-cover"
         />
       ) : (
@@ -126,6 +129,10 @@ export function FamilySection() {
   const removeMember = useRemoveFamilyMember();
   const acceptInvitation = useAcceptFamilyInvitation();
   const declineInvitation = useDeclineFamilyInvitation();
+
+  // Les invitations familiales nécessitent le serveur : connexion requise.
+  const { status } = useConnection();
+  const offline = status !== 'online';
 
   const [email, setEmail] = useState('');
   const [familyError, setFamilyError] = useState<string | null>(null);
@@ -240,7 +247,8 @@ export function FamilySection() {
             type="button"
             onClick={handleAdd}
             loading={addMember.isPending}
-            disabled={!email.trim()}
+            disabled={!email.trim() || offline}
+            title={offline ? 'Connexion requise pour inviter un membre' : undefined}
             className="shrink-0"
           >
             <UserPlus className="h-4 w-4" />

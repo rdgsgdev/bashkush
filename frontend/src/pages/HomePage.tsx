@@ -79,7 +79,7 @@ export function HomePage() {
           </div>
 
           <div className="rounded-2xl bg-white p-2 shadow-card">
-            {grocery.isLoading ? null : grocery.isError ? (
+            {grocery.isLoading ? null : grocery.isError && !grocery.data ? (
               <ErrorState />
             ) : pendingItems.length === 0 ? (
               <EmptyState
