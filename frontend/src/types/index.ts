@@ -85,6 +85,8 @@ export interface MealPlan {
   createdAt: string;
   updatedAt: string;
   meal: Meal;
+  /** Ingrédients réellement envoyés en liste de courses (sélection utilisateur). */
+  contributions?: Array<{ ingredientId: string; quantity: number }>;
 }
 
 export interface GroceryItem {

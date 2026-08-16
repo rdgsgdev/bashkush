@@ -82,7 +82,12 @@ const mealJsonSchema = {
     'difficulty', 'category', 'nutrition', 'notes', 'ingredients', 'steps',
   ],
   properties: {
-    name: { type: 'string', description: 'Nom du plat, court et appétissant' },
+    name: {
+      type: 'string',
+      description:
+        'Nom de plat original, comme sur une carte de restaurant — très court (2 à 4 mots, ex : « Le marin croquant »), ' +
+        'évoquant la composition ; sans type générique du plat (« Bol », « Salade »…) ni liste d’ingrédients',
+    },
     description: { type: 'string', description: 'Description en 1-2 phrases (peut être vide)' },
     servings: { type: 'integer', description: 'Nombre de portions total de la recette' },
     prepTime: { type: 'integer', description: 'Temps de préparation en minutes (0 si inconnu)' },
@@ -264,6 +269,7 @@ Règles impératives :
 - Les étapes sont numérotées à partir de 1, claires et complètes (températures, quantités).
 - NE JAMAIS inclure un ingrédient auquel un membre est allergique ; adapte la recette en conséquence.
 - Les quantités doivent permettre à chaque membre de s'approcher de ses objectifs caloriques et protéiques pour sa part des portions.
+- Convention de nommage : le nom est un nom de plat original, comme sur la carte d'un restaurant — très court (2 à 4 mots, article possible), ex : « Le marin croquant », « Aurore méditerranéenne », « Braise du sud-ouest ». Il évoque la composition du plat en lien direct ou indirect (ingrédient phare, origine culinaire, couleur, saison, ambiance). INTERDIT : mentionner le type ou le format générique du plat (« Bol », « Salade », « Curry », « Wrap », « Smoothie »…) et lister les ingrédients (ex : « Bol quinoa poulet avocat »).
 - Les noms, ingrédients et instructions sont en français.`;
 
 function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): string {
@@ -287,10 +293,13 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 
   if (request.previousMeal && request.feedback) {
     sections.push(
-      `Plat précédemment généré (JSON) :\n${JSON.stringify(request.previousMeal, null, 2)}\n\n` +
+      `Plat actuel à modifier (JSON) :\n${JSON.stringify(request.previousMeal, null, 2)}\n\n` +
         `L'utilisateur demande la modification suivante : « ${request.feedback} »\n` +
         `Régénère le plat complet (même format JSON) en appliquant cette consigne, ` +
-        `en conservant les éléments qui ne sont pas concernés par la modification.`,
+        `en conservant les éléments qui ne sont pas concernés par la modification.\n` +
+        `ATTENTION : le nom ne fait pas partie des éléments à conserver tel quel — ` +
+        `régénère-le selon la convention de nommage (nom original de restaurant, très court, ` +
+        `sans type générique), en accord avec la composition modifiée du plat.`,
     );
   }
 
