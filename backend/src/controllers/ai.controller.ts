@@ -69,6 +69,23 @@ const MEAL_FREQUENCY_LABELS: Record<string, string> = {
   autre: 'autre',
 };
 
+// Libellés FR des types de plat (contrainte lisible dans le prompt).
+const CATEGORY_PROMPT_LABELS: Record<string, string> = {
+  bowl: 'bol (bowl)',
+  wrap: 'wrap',
+  salad: 'salade',
+  soup: 'soupe',
+  sandwich: 'sandwich',
+  pasta: 'pâtes',
+  stir_fry: 'sauté au wok (stir-fry)',
+  dessert: 'dessert',
+  smoothie: 'smoothie',
+  snack_food: 'collation (snack)',
+  side: 'accompagnement',
+  main: 'plat principal',
+  beverage: 'boisson',
+};
+
 // ── Schéma JSON attendu de l'IA (structured outputs) ─────────
 // Tous les champs sont requis et typés simplement (le modèle met
 // 0 ou chaîne vide quand l'info n'a pas de sens) ; la
@@ -94,7 +111,17 @@ const mealJsonSchema = {
     cookTime: { type: 'integer', description: 'Temps de cuisson en minutes (0 si aucun)' },
     totalTime: { type: 'integer', description: 'Temps total en minutes' },
     difficulty: { type: 'string', enum: ['facile', 'moyen', 'difficile'] },
-    category: { type: 'string', enum: ['midi', 'soir', 'collation', 'autre'] },
+    category: {
+      type: 'string',
+      enum: [
+        'bowl', 'wrap', 'salad', 'soup', 'sandwich', 'pasta', 'stir_fry',
+        'dessert', 'smoothie', 'snack_food', 'side', 'main', 'beverage',
+      ],
+      description:
+        'Type de plat : bowl (bol), wrap, salad (salade), soup (soupe), sandwich, ' +
+        'pasta (pâtes), stir_fry (sauté/wok), dessert, smoothie, snack_food (collation salée/sucée), ' +
+        'side (accompagnement), main (plat principal), beverage (boisson)',
+    },
     nutrition: {
       type: 'object',
       additionalProperties: false,
@@ -284,7 +311,9 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 
   const constraints: string[] = [];
   if (request.difficulty) constraints.push(`Difficulté souhaitée : ${request.difficulty}.`);
-  if (request.category) constraints.push(`Catégorie : ${request.category}.`);
+  if (request.category) {
+    constraints.push(`Type de plat : ${CATEGORY_PROMPT_LABELS[request.category]}.`);
+  }
   if (request.desiredIngredients?.length) {
     constraints.push(`Ingrédients souhaités (doivent apparaître dans la recette) : ${request.desiredIngredients.join(', ')}.`);
   }

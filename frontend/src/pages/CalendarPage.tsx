@@ -10,7 +10,7 @@ import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedb
 import { useMealPlansForDate, useMealPlansForRange } from '../api/mealPlans';
 import { buildPlannedDays } from '../lib/plans';
 import { todayValue, formatShortDate, cn } from '../lib/utils';
-import { STATUS_LABELS } from '../types';
+import { STATUS_LABELS, MEAL_TYPE_LABELS } from '../types';
 import type { MealPlanStatus } from '../types';
 
 const STATUS_COLORS: Record<MealPlanStatus, string> = {
@@ -126,6 +126,7 @@ export function CalendarPage() {
                       <p className="mt-0.5 text-xs text-stone-400">
                         Du {formatShortDate(plan.fromDate)} au {formatShortDate(plan.toDate)} ·{' '}
                         {plan.servings} portion{plan.servings > 1 ? 's' : ''}
+                        {plan.mealType ? ` · ${MEAL_TYPE_LABELS[plan.mealType]}` : ''}
                       </p>
                       <span
                         className={cn(

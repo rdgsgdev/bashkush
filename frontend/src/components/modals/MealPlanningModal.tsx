@@ -5,14 +5,14 @@ import { Button } from '../ui/Button';
 import { Field, Select } from '../ui/FormControl';
 import { NumberStepper } from '../ui/NumberStepper';
 import { MealCarousel } from '../meals/MealCarousel';
-import { STATUS_OPTIONS } from '../../lib/options';
+import { STATUS_OPTIONS, MEAL_TYPE_OPTIONS } from '../../lib/options';
 import { todayValue, cn, formatQty } from '../../lib/utils';
 import { useCreateMealPlan, useUpdateMealPlan, useDeleteMealPlan } from '../../api/mealPlans';
 import type { IngredientSelection } from '../../api/mealPlans';
 import { useMeals } from '../../api/meals';
 import { useConnection } from '../../hooks/useConnection';
 import { AISLE_LABELS, AISLE_OPTIONS } from '../../types';
-import type { Ingredient, Meal, MealPlan, MealPlanStatus } from '../../types';
+import type { Ingredient, Meal, MealPlan, MealPlanStatus, MealType } from '../../types';
 
 interface MealPlanningModalProps {
   plan?: MealPlan | null; // null = création
@@ -38,6 +38,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
   const [toDate, setToDate] = useState<string>(toDateOnly(plan?.toDate) ?? fallback);
   const [servings, setServings] = useState<number>(plan?.servings ?? 2);
   const [status, setStatus] = useState<MealPlanStatus>((plan?.status ?? 'a_faire') as MealPlanStatus);
+  const [mealType, setMealType] = useState<MealType | ''>((plan?.mealType ?? '') as MealType | '');
   const [error, setError] = useState<string | null>(null);
   // Étape 2 : sélection des ingrédients à envoyer en liste de courses.
   const [step, setStep] = useState<1 | 2>(1);
@@ -79,6 +80,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
       setToDate(toDateOnly(plan?.toDate) ?? fb);
       setServings(plan?.servings ?? 2);
       setStatus((plan?.status ?? 'a_faire') as MealPlanStatus);
+      setMealType((plan?.mealType ?? '') as MealType | '');
       setError(null);
       setStep(1);
       setUnchecked(new Set());
@@ -119,6 +121,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
             toDate,
             servings,
             status,
+            mealType: mealType || null,
             // Sans sélection (édition sans changement portions/plat), le backend
             // ne touche pas aux contributions existantes.
             ...(selections ? { ingredients: selections } : {}),
@@ -131,6 +134,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
           toDate,
           servings,
           status,
+          mealType: mealType || null,
           ingredients: selections ?? [],
         });
       }
@@ -282,15 +286,30 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
         <NumberStepper value={servings} min={1} max={10} onChange={setServings} />
       </Field>
 
-      <Field label="Statut">
-        <Select value={status} onChange={(e) => setStatus(e.target.value as MealPlanStatus)}>
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Statut">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as MealPlanStatus)}>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Type de repas">
+          <Select
+            value={mealType}
+            onChange={(e) => setMealType(e.target.value as MealType | '')}
+          >
+            <option value="">—</option>
+            {MEAL_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
       <p className="rounded-xl bg-brand-50 px-3 py-2.5 text-xs text-brand-700">
         ℹ️ À l'étape suivante, vous choisirez les ingrédients à ajouter à votre liste de courses

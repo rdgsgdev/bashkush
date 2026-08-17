@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { queryKeys } from './keys';
 import { queryPersisterOption } from './persist';
-import type { MealPlan, MealPlanStatus } from '../types';
+import type { MealPlan, MealPlanStatus, MealType } from '../types';
 
 export interface MealPlanListParams {
   date?: string;
@@ -30,6 +30,7 @@ export async function createMealPlan(input: {
   toDate: string;
   servings: number;
   status: MealPlanStatus;
+  mealType?: MealType | null;
   ingredients?: IngredientSelection[];
 }): Promise<MealPlan> {
   const { data } = await api.post<MealPlan>('/meal-plans', input);
@@ -44,6 +45,7 @@ export async function updateMealPlan(
     toDate: string;
     servings: number;
     status: MealPlanStatus;
+    mealType?: MealType | null;
     ingredients: IngredientSelection[];
   }>,
 ): Promise<MealPlan> {

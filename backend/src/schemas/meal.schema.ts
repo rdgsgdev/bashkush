@@ -3,7 +3,23 @@ import { z } from 'zod';
 // ── Validations partagées ────────────────────────────────────
 
 export const difficultyEnum = z.enum(['facile', 'moyen', 'difficile']);
-export const categoryEnum = z.enum(['midi', 'soir', 'collation', 'autre']);
+// Type de plat (nature de la recette — PAS le moment du repas, qui est
+// porté par MealPlan.mealType).
+export const categoryEnum = z.enum([
+  'bowl',
+  'wrap',
+  'salad',
+  'soup',
+  'sandwich',
+  'pasta',
+  'stir_fry',
+  'dessert',
+  'smoothie',
+  'snack_food',
+  'side',
+  'main',
+  'beverage',
+]);
 
 // Rayons par défaut (les rayons personnalisés sont aussi autorisés : on accepte toute string).
 export const aisleName = z.string().min(1).max(60);

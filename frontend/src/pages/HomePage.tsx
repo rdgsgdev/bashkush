@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ShoppingCart, ChefHat, Check, Clock, CalendarDays } from 'lucide-react';
+import { ChevronRight, ShoppingCart, ChefHat, Check, CalendarDays } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useGrocery, useToggleCheck } from '../api/grocery';
 import { useMealPlans } from '../api/mealPlans';
 import { todayValue, parseDate, formatShortDate, aisleColor, cn } from '../lib/utils';
-import { AISLE_LABELS, STATUS_LABELS } from '../types';
+import { AISLE_LABELS, STATUS_LABELS, MEAL_TYPE_LABELS } from '../types';
 import type { MealPlan, MealPlanStatus } from '../types';
 
 const STATUS_COLORS: Record<MealPlanStatus, string> = {
@@ -47,6 +47,7 @@ function PlanRow({ plan, onOpen }: { plan: MealPlan; onOpen: (plan: MealPlan) =>
         <p className="mt-0.5 text-xs text-stone-400">
           Du {formatShortDate(plan.fromDate)} au {formatShortDate(plan.toDate)} · {plan.servings}{' '}
           portion{plan.servings > 1 ? 's' : ''}
+          {plan.mealType ? ` · ${MEAL_TYPE_LABELS[plan.mealType]}` : ''}
         </p>
         <div className="mt-1.5 flex items-center gap-2">
           <span
@@ -133,22 +134,19 @@ export function HomePage() {
               />
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {enPreparation.length > 0 && (
                 <div className="space-y-3">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-sky-600">
-                    <Clock className="h-3.5 w-3.5" /> En préparation
-                  </p>
                   {enPreparation.map((plan) => (
                     <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
                   ))}
                 </div>
               )}
+              {enPreparation.length > 0 && aFaire.length > 0 && (
+                <div className="border-t border-stone-200/70" />
+              )}
               {aFaire.length > 0 && (
                 <div className="space-y-3">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-600">
-                    <CalendarDays className="h-3.5 w-3.5" /> À faire
-                  </p>
                   {aFaire.map((plan) => (
                     <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
                   ))}

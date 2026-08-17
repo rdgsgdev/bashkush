@@ -93,6 +93,7 @@ export const createMealPlan = asyncHandler(async (req: AuthedRequest, res: Respo
       toDate: input.toDate,
       servings: input.servings,
       status: input.status,
+      mealType: input.mealType,
       ingredientSelections: input.ingredients,
     }),
   );
