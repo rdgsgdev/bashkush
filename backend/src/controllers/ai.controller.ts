@@ -326,9 +326,8 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
         `L'utilisateur demande la modification suivante : « ${request.feedback} »\n` +
         `Régénère le plat complet (même format JSON) en appliquant cette consigne, ` +
         `en conservant les éléments qui ne sont pas concernés par la modification.\n` +
-        `ATTENTION : le nom ne fait pas partie des éléments à conserver tel quel — ` +
-        `régénère-le selon la convention de nommage (nom original de restaurant, très court, ` +
-        `sans type générique), en accord avec la composition modifiée du plat.`,
+        `ATTENTION : conserve EXACTEMENT le nom du plat actuel (champ name), ` +
+        `caractère pour caractère — le nom ne doit jamais changer lors d'une modification.`,
     );
   }
 
@@ -338,7 +337,12 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 // ── Normalisation de la réponse en CreateMealInput ───────────
 
 /** 0 / chaîne vide → null ; ids d'ingrédients générés et uniques. */
-function normalizeMeal(ai: z.infer<typeof aiMealResponseSchema>, servings: number): CreateMealInput {
+function normalizeMeal(
+  ai: z.infer<typeof aiMealResponseSchema>,
+  servings: number,
+  /** Modification d'un plat existant : le nom est imposé (jamais régénéré). */
+  previousName?: string | null,
+): CreateMealInput {
   const usedIds = new Set<string>();
   const ingredients = ai.ingredients.map((ing) => {
     let id = slugify(ing.name);
@@ -359,7 +363,8 @@ function normalizeMeal(ai: z.infer<typeof aiMealResponseSchema>, servings: numbe
   });
 
   return {
-    name: ai.name,
+    // Modification : on impose le nom existant, peu importe la réponse IA.
+    name: previousName?.trim() || ai.name,
     description: ai.description.trim() || null,
     // On impose les portions demandées (peu importe ce que l'IA renvoie).
     servings,
@@ -413,7 +418,7 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
     throw new HttpError(502, 'Le plat généré par l’IA est incomplet, réessaie');
   }
 
-  res.json({ meal: normalizeMeal(parsed.data, request.servings) });
+  res.json({ meal: normalizeMeal(parsed.data, request.servings, request.previousMeal?.name) });
 });
 
 // ── Complétion des apports d'un ingrédient (ajout manuel) ────

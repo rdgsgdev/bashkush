@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Field, Select } from '../ui/FormControl';
 import { NumberStepper } from '../ui/NumberStepper';
 import { MealCarousel } from '../meals/MealCarousel';
+import { DateRangePicker } from '../calendar/DateRangePicker';
 import { STATUS_OPTIONS, MEAL_TYPE_OPTIONS } from '../../lib/options';
 import { todayValue, cn, formatQty } from '../../lib/utils';
 import { useCreateMealPlan, useUpdateMealPlan, useDeleteMealPlan } from '../../api/mealPlans';
@@ -263,24 +264,16 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
         <MealCarousel selectedId={mealId} onSelect={(m) => setMealId(m.id)} />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Du">
-          <input
-            type="date"
-            className="field min-w-0"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-          />
-        </Field>
-        <Field label="Au">
-          <input
-            type="date"
-            className="field min-w-0"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-          />
-        </Field>
-      </div>
+      <Field label="Jour(s) planifié(s)">
+        <DateRangePicker
+          from={fromDate}
+          to={toDate}
+          onChange={(f, t) => {
+            setFromDate(f);
+            setToDate(t);
+          }}
+        />
+      </Field>
 
       <Field label="Portions">
         <NumberStepper value={servings} min={1} max={10} onChange={setServings} />

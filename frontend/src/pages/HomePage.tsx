@@ -135,23 +135,12 @@ export function HomePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {enPreparation.length > 0 && (
-                <div className="space-y-3">
-                  {enPreparation.map((plan) => (
-                    <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
-                  ))}
-                </div>
-              )}
-              {enPreparation.length > 0 && aFaire.length > 0 && (
-                <div className="border-t border-stone-200/70" />
-              )}
-              {aFaire.length > 0 && (
-                <div className="space-y-3">
-                  {aFaire.map((plan) => (
-                    <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
-                  ))}
-                </div>
-              )}
+              {enPreparation.map((plan) => (
+                <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
+              ))}
+              {aFaire.map((plan) => (
+                <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
+              ))}
             </div>
           )}
         </section>
