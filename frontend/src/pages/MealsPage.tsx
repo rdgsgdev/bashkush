@@ -1,7 +1,9 @@
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, UtensilsCrossed } from 'lucide-react';
+import { Plus, RotateCcw, SearchX, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { MealCard } from '../components/meals/MealCard';
+import { MealsFilters, MealSort } from '../components/meals/MealsFilters';
 import { MealEditionModal } from '../components/modals/MealEditionModal';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
 import { MealPlanningModal } from '../components/modals/MealPlanningModal';
@@ -10,10 +12,59 @@ import { MealAIGenerationModal } from '../components/modals/MealAIGenerationModa
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useMeals } from '../api/meals';
+import { Category, Difficulty } from '../types';
+
+/** Minuscules sans accents, pour une recherche insensible aux diacritiques. */
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 export function MealsPage() {
   const [params, setParams] = useSearchParams();
   const { data: meals, isLoading, isError } = useMeals();
+
+  // Filtres/tri de la liste (état local, remis à zéro en quittant la page).
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<Category | 'all'>('all');
+  const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [sort, setSort] = useState<MealSort>('recent');
+
+  const hasActiveFilters =
+    search.trim() !== '' || category !== 'all' || difficulty !== 'all' || favoritesOnly;
+
+  const resetFilters = () => {
+    setSearch('');
+    setCategory('all');
+    setDifficulty('all');
+    setFavoritesOnly(false);
+  };
+
+  const visibleMeals = useMemo(() => {
+    if (!meals) return [];
+    const query = normalizeText(search.trim());
+    const filtered = meals.filter((meal) => {
+      if (favoritesOnly && !meal.isFavorite) return false;
+      if (category !== 'all' && meal.category !== category) return false;
+      if (difficulty !== 'all' && meal.difficulty !== difficulty) return false;
+      if (query && !normalizeText(meal.name).includes(query)) return false;
+      return true;
+    });
+    return filtered.sort((a, b) => {
+      switch (sort) {
+        case 'name':
+          return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+        case 'time':
+          // Plats sans temps total envoyés en fin de liste.
+          return (a.totalTime ?? Infinity) - (b.totalTime ?? Infinity);
+        default:
+          return b.createdAt.localeCompare(a.createdAt);
+      }
+    });
+  }, [meals, search, category, difficulty, favoritesOnly, sort]);
 
   // Modale d'ajout : ?meal=new → choix (IA ou manuel).
   const mealParam = params.get('meal');
@@ -75,11 +126,16 @@ export function MealsPage() {
     setParams(params, { replace: true });
   };
 
+  const total = meals?.length ?? 0;
+  const subtitle = hasActiveFilters
+    ? `${visibleMeals.length} sur ${total} plats`
+    : `${total} plat${total > 1 ? 's' : ''}`;
+
   return (
     <div className="flex flex-1 flex-col">
       <Header
         title="Mes plats"
-        subtitle={`${meals?.length ?? 0} plat${(meals?.length ?? 0) > 1 ? 's' : ''}`}
+        subtitle={subtitle}
         action={
           <Button onClick={() => setParams({ meal: 'new' })} className="!px-3 !py-2">
             <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Ajouter</span>
@@ -87,12 +143,30 @@ export function MealsPage() {
         }
       />
 
+      {/* Barre de filtres/tri, affichée seulement s'il y a des plats à filtrer. */}
+      {!isLoading && !isError && total > 0 && (
+        <MealsFilters
+          search={search}
+          onSearchChange={setSearch}
+          category={category}
+          onCategoryChange={setCategory}
+          difficulty={difficulty}
+          onDifficultyChange={setDifficulty}
+          favoritesOnly={favoritesOnly}
+          onToggleFavoritesOnly={() => setFavoritesOnly((v) => !v)}
+          sort={sort}
+          onSortChange={setSort}
+          hasActiveFilters={hasActiveFilters}
+          onReset={resetFilters}
+        />
+      )}
+
       <main className="flex-1 space-y-3 p-4">
         {isLoading ? (
           <FullScreenLoader />
         ) : isError && !meals ? (
           <ErrorState />
-        ) : (meals?.length ?? 0) === 0 ? (
+        ) : total === 0 ? (
           <EmptyState
             icon={UtensilsCrossed}
             title="Aucun plat"
@@ -103,9 +177,20 @@ export function MealsPage() {
               </Button>
             }
           />
+        ) : visibleMeals.length === 0 ? (
+          <EmptyState
+            icon={SearchX}
+            title="Aucun résultat"
+            description="Aucun plat ne correspond à votre recherche ou à vos filtres."
+            action={
+              <Button variant="secondary" onClick={resetFilters}>
+                <RotateCcw className="h-4 w-4" /> Réinitialiser les filtres
+              </Button>
+            }
+          />
         ) : (
           <div className="space-y-3">
-            {meals!.map((meal) => (
+            {visibleMeals.map((meal) => (
               <MealCard
                 key={meal.id}
                 meal={meal}
