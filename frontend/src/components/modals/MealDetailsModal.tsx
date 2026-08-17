@@ -4,8 +4,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { MealDetailsContent } from '../meals/MealDetailsContent';
 import { usePlanStepProgress } from '../../hooks/usePlanStepProgress';
-import { useUpdatePlanStatus } from '../../api/mealPlans';
-import type { Meal, MealPlan, MealPlanStatus } from '../../types';
+import type { Meal, MealPlan } from '../../types';
 
 interface MealDetailsModalProps {
   open: boolean;
@@ -30,8 +29,9 @@ export function MealDetailsModal({
   const isPlanContext = Boolean(plan);
 
   const [servings, setServings] = useState<number>(plan?.servings ?? resolvedMeal?.servings ?? 2);
-  const { done, toggle, reset } = usePlanStepProgress(plan?.id);
-  const updateStatus = useUpdatePlanStatus();
+  // Étapes cochées : persistées côté serveur (partagées avec la famille),
+  // le statut du plan est redérivé par l'API à chaque mise à jour.
+  const { done, toggle, reset } = usePlanStepProgress(plan);
 
   useEffect(() => {
     if (open) setServings(plan?.servings ?? resolvedMeal?.servings ?? 2);
@@ -42,25 +42,6 @@ export function MealDetailsModal({
   }
 
   const meal = resolvedMeal;
-  const totalSteps = meal.steps?.length ?? 0;
-
-  // ── Statut auto (contexte planification uniquement) ───────
-  const deriveStatus = (count: number): MealPlanStatus =>
-    totalSteps === 0 ? 'a_faire' : count === 0 ? 'a_faire' : count >= totalSteps ? 'prepare' : 'en_preparation';
-
-  const handleToggle = (stepNumber: number) => {
-    toggle(stepNumber);
-    if (!plan || totalSteps === 0) return;
-    const projected = new Set(done);
-    if (projected.has(stepNumber)) projected.delete(stepNumber);
-    else projected.add(stepNumber);
-    updateStatus.mutate({ id: plan.id, status: deriveStatus(projected.size) });
-  };
-
-  const handleReset = () => {
-    reset();
-    if (plan) updateStatus.mutate({ id: plan.id, status: 'a_faire' });
-  };
 
   const footer = isPlanContext && plan ? (
     <Button variant="secondary" className="w-full" onClick={() => onEditPlanning?.(plan.id)}>
@@ -79,7 +60,7 @@ export function MealDetailsModal({
         servings={servings}
         onServingsChange={setServings}
         stepsInteraction={
-          isPlanContext ? { done, onToggle: handleToggle, onReset: handleReset } : undefined
+          isPlanContext ? { done, onToggle: toggle, onReset: reset } : undefined
         }
       />
     </Modal>

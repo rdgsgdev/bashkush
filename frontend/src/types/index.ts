@@ -82,6 +82,8 @@ export interface MealPlan {
   toDate: string;
   servings: number;
   status: MealPlanStatus;
+  /** Numéros des étapes de préparation cochées — partagés entre membres. */
+  completedSteps: number[];
   createdAt: string;
   updatedAt: string;
   meal: Meal;

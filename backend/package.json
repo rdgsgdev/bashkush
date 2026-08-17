@@ -30,11 +30,11 @@
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "prisma": "^5.22.0",
+    "socket.io": "^4.8.3",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
     "zod": "^3.23.8"
   },
-  "devDependencies": {},
   "engines": {
     "node": ">=20"
   }

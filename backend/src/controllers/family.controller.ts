@@ -4,6 +4,7 @@ import { asyncHandler, HttpError } from '../middleware/error';
 import { AuthedRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
 import { ensureFamilyId } from '../lib/family';
+import { emitFamilyInvalidation } from '../realtime/io';
 import { computeDailyTargets } from '../lib/nutrition';
 import { addFamilyMemberSchema } from '../schemas/family.schema';
 
@@ -217,6 +218,7 @@ export const addFamilyMember = asyncHandler(async (req: AuthedRequest, res: Resp
     }
     return created;
   });
+  emitFamilyInvalidation(familyId, ['family']);
   res.status(201).json(member);
 });
 
@@ -250,6 +252,7 @@ export const removeFamilyMember = asyncHandler(async (req: AuthedRequest, res: R
           data: { familyId: null },
         });
       });
+      if (myFamilyId) emitFamilyInvalidation(myFamilyId, ['family']);
       res.status(204).send();
       return;
     }
@@ -275,6 +278,7 @@ export const removeFamilyMember = asyncHandler(async (req: AuthedRequest, res: R
       });
     }
   });
+  emitFamilyInvalidation(member.familyId, ['family']);
   res.status(204).send();
 });
 
@@ -321,7 +325,7 @@ export const acceptFamilyInvitation = asyncHandler(async (req: AuthedRequest, re
   if (!myEmail) throw new HttpError(400, 'Courriel manquant sur le compte connecté');
   const { id } = req.params;
 
-  const familyId = await prisma.$transaction(async (tx) => {
+  const { newFamilyId, oldFamilyId } = await prisma.$transaction(async (tx) => {
     // Même verrou que ensureFamilyId : pas d'acceptation en parallèle d'une
     // (auto-)acceptation concurrente.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
@@ -363,10 +367,13 @@ export const acceptFamilyInvitation = asyncHandler(async (req: AuthedRequest, re
         familyId: invitation.familyId,
       },
     });
-    return invitation.familyId;
+    return { newFamilyId: invitation.familyId, oldFamilyId };
   });
 
-  res.json({ familyId });
+  // Les deux familles voient leur liste de membres changer.
+  if (oldFamilyId) emitFamilyInvalidation(oldFamilyId, ['family']);
+  emitFamilyInvalidation(newFamilyId, ['family']);
+  res.json({ familyId: newFamilyId });
 });
 
 /** Refuse une invitation : la ligne d'invitation est supprimée. */

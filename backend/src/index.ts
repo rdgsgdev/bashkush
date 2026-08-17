@@ -1,7 +1,9 @@
+import { createServer } from 'http';
 import { app } from './app';
 import { env } from './config/env';
 import { prisma } from './prisma';
 import { ensureBucket } from './lib/storage';
+import { initRealtime, closeRealtime } from './realtime/io';
 
 /** Avertit si DATABASE_URL utilise le pooleur de transaction (6543) qui casse les transactions Prisma. */
 function warnIfTransactionPooler() {
@@ -19,7 +21,11 @@ function warnIfTransactionPooler() {
   }
 }
 
-const server = app.listen(env.PORT, () => {
+// Le serveur HTTP héberge l'API Express ET le temps réel (Socket.io).
+const server = createServer(app);
+initRealtime(server);
+
+server.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`🚀 Bashkush API démarrée sur http://localhost:${env.PORT} (${env.NODE_ENV})`);
   warnIfTransactionPooler();
@@ -27,10 +33,11 @@ const server = app.listen(env.PORT, () => {
   ensureBucket().catch(() => undefined);
 });
 
-// Arrêt propre : on ferme le serveur et la connexion Prisma.
+// Arrêt propre : on ferme le temps réel, le serveur et la connexion Prisma.
 async function shutdown(signal: string) {
   // eslint-disable-next-line no-console
   console.log(`\n${signal} reçu — arrêt en cours…`);
+  await closeRealtime();
   server.close();
   await prisma.$disconnect();
   process.exit(0);

@@ -175,6 +175,9 @@ model MealPlan {
   toDate   DateTime @map("to_date")
   servings Int      @default(2) // 1..10
   status   String   @default("a_faire") // a_faire | en_preparation | prepare
+  // Numéros des étapes de préparation cochées (partagées entre membres de
+  // la famille) — le statut est dérivé de ce tableau côté serveur.
+  completedSteps Int[] @default([]) @map("completed_steps")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

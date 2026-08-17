@@ -39,3 +39,13 @@ export type UpdateMealPlanInput = z.infer<typeof updateMealPlanSchema>;
 export const updateStatusSchema = z.object({
   status: mealPlanStatusEnum,
 });
+
+/**
+ * PATCH /api/meal-plans/:id/steps — étapes de préparation cochées.
+ * `completedSteps` est la valeur FINALE (liste absolue de numéros d'étapes),
+ * ce qui rend l'appel idempotent (même pattern que grocery check offline).
+ * Le statut du plan est dérivé côté serveur depuis ce tableau.
+ */
+export const updateStepsSchema = z.object({
+  completedSteps: z.array(z.number().int().min(1)).max(100),
+});

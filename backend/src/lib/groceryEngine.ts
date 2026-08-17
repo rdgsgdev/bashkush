@@ -254,7 +254,11 @@ export async function updateMealPlan(
   if (input.fromDate) data.fromDate = input.fromDate;
   if (input.toDate) data.toDate = input.toDate;
   if (input.status) data.status = input.status;
-  if (mealChanged) data.meal = { connect: { id: meal.id } };
+  if (mealChanged) {
+    data.meal = { connect: { id: meal.id } };
+    // Les étapes cochées se rapportent à l'ancien plat → on repart de zéro.
+    data.completedSteps = [];
+  }
   if (servingsChanged) data.servings = input.servings;
 
   if (servingsChanged || mealChanged) {
