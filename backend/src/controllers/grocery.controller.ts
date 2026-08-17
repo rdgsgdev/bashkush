@@ -67,6 +67,7 @@ export const createGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
         quantity: input.quantity,
         unit: input.unit,
         aisle: input.aisle,
+        store: input.store,
         notes: input.notes,
         isManual: true,
       },
@@ -108,6 +109,7 @@ export const updateGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
       input.quantity !== undefined ||
       input.unit !== undefined ||
       input.aisle !== undefined ||
+      input.store !== undefined ||
       input.notes !== undefined);
 
   const item = await prisma.groceryItem.update({

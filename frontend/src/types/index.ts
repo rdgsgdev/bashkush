@@ -116,6 +116,7 @@ export interface GroceryItem {
   quantity: number;
   unit: string;
   aisle: string;
+  store?: string | null; // magasin (clé de STORE_LABELS) — jamais rempli par la planification
   isManual: boolean;
   checked: boolean;
   archived: boolean;
@@ -187,3 +188,12 @@ export const AISLE_LABELS: Record<string, string> = {
 };
 
 export const AISLE_OPTIONS = Object.keys(AISLE_LABELS);
+
+// Magasins proposés pour un item (champ optionnel, choix manuel uniquement).
+export const STORE_LABELS: Record<string, string> = {
+  maxi: 'Maxi',
+  iga: 'IGA',
+  costco: 'Costco',
+  jean_coutu: 'Jean Coutu',
+  pharmaprix: 'Pharmaprix',
+};

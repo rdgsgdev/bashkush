@@ -3,9 +3,11 @@ import { AlertCircle } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Field, Input, Select, Textarea } from '../ui/FormControl';
-import { AISLE_OPTIONS_LIST, UNIT_OPTIONS } from '../../lib/options';
+import { AISLE_OPTIONS_LIST, STORE_OPTIONS, UNIT_OPTIONS } from '../../lib/options';
+import { StoreLogo } from './StoreLogo';
 import { useCreateGroceryItem, useUpdateGroceryItem } from '../../api/grocery';
 import type { GroceryAisle, GroceryItem } from '../../types';
+import { cn } from '../../lib/utils';
 
 interface GroceryItemModalProps {
   item?: GroceryItem | null; // null = création
@@ -20,6 +22,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
   const [quantity, setQuantity] = useState('1');
   const [unit, setUnit] = useState('g');
   const [aisle, setAisle] = useState('epicerie_seche');
+  const [store, setStore] = useState('');
   const [notes, setNotes] = useState('');
   const [customAisle, setCustomAisle] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
       setQuantity(String(item?.quantity ?? 1));
       setUnit(item?.unit ?? 'g');
       setAisle(item?.aisle ?? 'epicerie_seche');
+      setStore(item?.store ?? '');
       setNotes(item?.notes ?? '');
       setCustomAisle('');
       setError(null);
@@ -66,7 +70,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
       if (isEdit && item) {
         await update.mutateAsync({
           id: item.id,
-          input: { name, quantity: qty, unit, aisle: finalAisle, notes },
+          input: { name, quantity: qty, unit, aisle: finalAisle, store: store || null, notes },
         });
       } else {
         // UUID généré côté client : rend la création rejouable hors ligne
@@ -77,6 +81,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
           quantity: qty,
           unit,
           aisle: finalAisle,
+          store: store || null,
           notes,
         });
       }
@@ -153,6 +158,41 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
             onChange={(e) => setCustomAisle(e.target.value)}
             placeholder="Laisser vide pour utiliser le rayon ci-dessus"
           />
+        </Field>
+
+        {/* Magasin : chips avec logos ('' = aucun). */}
+        <Field label="Magasin">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setStore('')}
+              className={cn(
+                'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition',
+                store === ''
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300',
+              )}
+            >
+              Aucun
+            </button>
+            {STORE_OPTIONS.map((o) => (
+              <button
+                type="button"
+                key={o.value}
+                onClick={() => setStore(o.value)}
+                aria-label={o.label}
+                title={o.label}
+                className={cn(
+                  'flex items-center rounded-lg border px-2.5 py-1.5 transition',
+                  store === o.value
+                    ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
+                    : 'border-stone-200 bg-white hover:border-stone-300',
+                )}
+              >
+                <StoreLogo store={o.value} className="h-5 w-auto" />
+              </button>
+            ))}
+          </div>
         </Field>
 
         <Field label="Notes">
