@@ -9,10 +9,50 @@ export const api = axios.create({
   timeout: 15000,
 });
 
+// Délai max pour obtenir le jeton : avec autoRefreshToken, getSession() peut
+// déclencher un refresh réseau (fetch Supabase sans timeout). Le timeout axios
+// ne couvre pas le temps passé dans l'intercepteur de requête — sans cette
+// garde, une mutation « en ligne » sur un réseau qui cale reste pendante
+// indéfiniment (spinner sans fin alors que l'action aurait pu être mise en file).
+const AUTH_TIMEOUT_MS = 5_000;
+
+/** Le jeton d'auth n'a pas pu être obtenu à temps (réseau bloqué / refresh pendante). */
+export class AuthUnavailableError extends Error {
+  constructor() {
+    super('Session Supabase indisponible (délai dépassé).');
+    this.name = 'AuthUnavailableError';
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new AuthUnavailableError()), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+export { withTimeout };
+
 // Attache le jeton Supabase à chaque requête vers l'API.
 api.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  let token: string | undefined;
+  try {
+    const { data } = await withTimeout(supabase.auth.getSession(), AUTH_TIMEOUT_MS);
+    token = data.session?.access_token;
+  } catch {
+    // Refresh réseau impossible (hors ligne, réseau qui cale…) : on ne peut
+    // pas envoyer la requête authentifiée → traité comme injoignable par la
+    // file offline (voir runOfflineAware).
+    throw new AuthUnavailableError();
+  }
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

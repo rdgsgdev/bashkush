@@ -36,6 +36,7 @@ export function MealCard({ meal, onClick, layout = 'list', showFavorite = true, 
   if (layout === 'carousel') {
     return (
       <button
+        data-meal-id={meal.id}
         onClick={onClick}
         className={cn(
           'group relative w-44 shrink-0 snap-start overflow-hidden rounded-2xl bg-white text-left shadow-card transition',

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ShoppingCart, ChefHat, Check, CalendarDays } from 'lucide-react';
+import { ChevronRight, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
+import { MealCarousel } from '../components/meals/MealCarousel';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useGrocery, useToggleCheck } from '../api/grocery';
@@ -143,6 +144,25 @@ export function HomePage() {
               ))}
             </div>
           )}
+        </section>
+
+        {/* Tous mes plats — carrousel avec raccourci de création en tête */}
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
+              <UtensilsCrossed className="h-4 w-4 text-brand-500" /> Mes plats
+            </h2>
+            <button
+              onClick={() => navigate('/meals')}
+              className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
+            >
+              Tous les plats <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          <MealCarousel
+            onAdd={() => navigate('/meals?meal=new')}
+            onSelect={(m) => navigate(`/meals?details=${m.id}`)}
+          />
         </section>
 
         {/* Aperçu liste de courses — seule la case à cocher marque l'item acheté */}

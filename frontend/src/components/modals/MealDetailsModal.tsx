@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { CalendarPlus, Pencil } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { MealDetailsContent } from '../meals/MealDetailsContent';
@@ -15,6 +15,8 @@ interface MealDetailsModalProps {
   /** Contexte simple (liste des plats) : lecture seule + modif du plat. */
   meal?: Meal | null;
   onEditMeal?: (mealId: string) => void;
+  /** Contexte simple (liste des plats) : planifier ce plat. */
+  onPlanMeal?: (mealId: string) => void;
 }
 
 export function MealDetailsModal({
@@ -24,6 +26,7 @@ export function MealDetailsModal({
   onEditPlanning,
   meal: mealProp,
   onEditMeal,
+  onPlanMeal,
 }: MealDetailsModalProps) {
   const resolvedMeal = plan?.meal ?? mealProp ?? null;
   const isPlanContext = Boolean(plan);
@@ -48,9 +51,20 @@ export function MealDetailsModal({
       <Pencil className="h-4 w-4" /> Modifier la planification
     </Button>
   ) : (
-    <Button variant="secondary" className="w-full" onClick={() => onEditMeal?.(meal.id)}>
-      <Pencil className="h-4 w-4" /> Modifier le plat
-    </Button>
+    <div className="flex gap-2">
+      {onPlanMeal && (
+        <Button className="flex-1" onClick={() => onPlanMeal(meal.id)}>
+          <CalendarPlus className="h-4 w-4" /> Planifier
+        </Button>
+      )}
+      <Button
+        variant="secondary"
+        className={onPlanMeal ? 'flex-1' : 'w-full'}
+        onClick={() => onEditMeal?.(meal.id)}
+      >
+        <Pencil className="h-4 w-4" /> Modifier le plat
+      </Button>
+    </div>
   );
 
   return (

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createStore, get, set } from 'idb-keyval';
 import { supabase } from '../lib/supabase';
+import { AuthUnavailableError, withTimeout } from '../api/client';
 import { queryClient } from '../queryClient';
 import { connectionState } from './connectionStore';
 import { markApiReachable, markApiUnreachable } from './connection';
@@ -22,8 +23,15 @@ const syncApi = axios.create({
   timeout: 20_000,
 });
 syncApi.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  let token: string | undefined;
+  try {
+    const { data } = await withTimeout(supabase.auth.getSession(), 5_000);
+    token = data.session?.access_token;
+  } catch {
+    // Refresh impossible au moment du rejeu : l'action reste en file, la
+    // sonde santé relancera le rejeu plus tard.
+    throw new AuthUnavailableError();
+  }
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -176,7 +184,8 @@ export async function flushQueue(): Promise<void> {
  *   démarrage en cours) → mise en file immédiate + réponse synthétique
  *   (les updates optimistes restent en place, aucun temps d'attente) ;
  * - en ligne → vraie requête, avec repli sur la file en cas d'erreur réseau
- *   (timeout, serveur en veille) ;
+ *   (timeout, serveur en veille) ou de jeton d'auth non obtenu à temps
+ *   (AuthUnavailableError — refresh Supabase bloqué par le réseau) ;
  * - erreur HTTP réelle (4xx/5xx) → remontée normalement aux hooks.
  */
 export async function runOfflineAware<T>(opts: {
@@ -204,7 +213,9 @@ export async function runOfflineAware<T>(opts: {
   try {
     return await opts.request();
   } catch (err) {
-    if (axios.isAxiosError(err) && !err.response) {
+    const unreachable =
+      (axios.isAxiosError(err) && !err.response) || err instanceof AuthUnavailableError;
+    if (unreachable) {
       markApiUnreachable();
       await enqueue({
         method: opts.method,

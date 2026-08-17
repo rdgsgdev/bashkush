@@ -22,6 +22,8 @@ interface MealPlanningModalProps {
   onClose: () => void;
   /** Date par défaut en création (ex: jour sélectionné dans le calendrier). */
   defaultDate?: string;
+  /** Plat présélectionné en création (ex: bouton « Planifier » sur la fiche d'un plat). */
+  defaultMealId?: string;
 }
 
 /**
@@ -31,7 +33,7 @@ interface MealPlanningModalProps {
 const toDateOnly = (iso?: string | null): string | undefined =>
   iso ? iso.slice(0, 10) : undefined;
 
-export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlanningModalProps) {
+export function MealPlanningModal({ plan, open, onClose, defaultDate, defaultMealId }: MealPlanningModalProps) {
   const isEdit = Boolean(plan);
   const fallback = defaultDate ?? todayValue();
   const [mealId, setMealId] = useState<string>(plan?.mealId ?? '');
@@ -76,7 +78,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
   useEffect(() => {
     if (open) {
       const fb = defaultDate ?? todayValue();
-      setMealId(plan?.mealId ?? '');
+      setMealId(plan?.mealId ?? defaultMealId ?? '');
       setFromDate(toDateOnly(plan?.fromDate) ?? fb);
       setToDate(toDateOnly(plan?.toDate) ?? fb);
       setServings(plan?.servings ?? 2);
@@ -87,7 +89,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
       setUnchecked(new Set());
       setQtyOverrides({});
     }
-  }, [open, plan, defaultDate]);
+  }, [open, plan, defaultDate, defaultMealId]);
 
   // Changement de plat pendant la session : sélection par défaut. En édition du
   // plat d'origine, on restaure la mémoire (ingrédients déjà contributionnés).
@@ -261,7 +263,11 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
 
       <div>
         <label className="label">Choisissez un plat</label>
-        <MealCarousel selectedId={mealId} onSelect={(m) => setMealId(m.id)} />
+        <MealCarousel
+          selectedId={mealId}
+          onSelect={(m) => setMealId(m.id)}
+          scrollToId={plan?.mealId ?? defaultMealId}
+        />
       </div>
 
       <Field label="Jour(s) planifié(s)">
