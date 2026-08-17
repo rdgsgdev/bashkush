@@ -10,13 +10,15 @@ import {
   archiveSchema,
   unarchiveSchema,
   checkItemSchema,
+  reorderItemsSchema,
 } from '../schemas/grocery.schema';
 import type { Response } from 'express';
 
 /**
  * GET /api/grocery-items?archived=false
  * Renvoie { items, aisles } pour la famille. Les items sont triés par
- * rayon (sort_order) puis nom. Les rayons restent un catalogue global.
+ * rayon (sort_order), puis position (ordre manuel), puis nom. Les rayons
+ * restent un catalogue global.
  */
 export const listGroceryItems = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
@@ -25,7 +27,7 @@ export const listGroceryItems = asyncHandler(async (req: AuthedRequest, res: Res
   const [items, aisles] = await Promise.all([
     prisma.groceryItem.findMany({
       where: { familyId, archived },
-      orderBy: [{ aisle: 'asc' }, { name: 'asc' }],
+      orderBy: [{ aisle: 'asc' }, { position: 'asc' }, { name: 'asc' }],
     }),
     prisma.groceryAisle.findMany({ orderBy: { sortOrder: 'asc' } }),
   ]);
@@ -38,6 +40,7 @@ export const listGroceryItems = asyncHandler(async (req: AuthedRequest, res: Res
     const oa = order.get(a.aisle) ?? 9999;
     const ob = order.get(b.aisle) ?? 9999;
     if (oa !== ob) return oa - ob;
+    if (a.position !== b.position) return a.position - b.position;
     return a.name.localeCompare(b.name, 'fr');
   });
 
@@ -56,6 +59,14 @@ export const createGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
     create: { name: input.aisle, label: input.aisle, sortOrder: 999 },
   });
 
+  // Nouvel item en bas de son rayon (l'ordre manuel éventuel est préservé).
+  const lastInAisle = await prisma.groceryItem.findFirst({
+    where: { familyId, aisle: input.aisle, archived: false },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  const position = (lastInAisle?.position ?? -1) + 1;
+
   let item;
   try {
     item = await prisma.groceryItem.create({
@@ -67,6 +78,7 @@ export const createGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
         quantity: input.quantity,
         unit: input.unit,
         aisle: input.aisle,
+        position,
         store: input.store,
         notes: input.notes,
         isManual: true,
@@ -93,13 +105,21 @@ export const updateGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
   const existing = await prisma.groceryItem.findFirst({ where: { id, familyId } });
   if (!existing) throw new HttpError(404, 'Item introuvable');
 
-  // Si le rayon change vers un nouveau rayon, on l'enregistre.
+  // Si le rayon change vers un nouveau rayon, on l'enregistre et on place
+  // l'item en bas de son nouveau rayon.
+  let nextPosition: number | undefined;
   if (input.aisle && input.aisle !== existing.aisle) {
     await prisma.groceryAisle.upsert({
       where: { name: input.aisle },
       update: {},
       create: { name: input.aisle, label: input.aisle, sortOrder: 999 },
     });
+    const lastInAisle = await prisma.groceryItem.findFirst({
+      where: { familyId, aisle: input.aisle, archived: false, id: { not: id } },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    nextPosition = (lastInAisle?.position ?? -1) + 1;
   }
 
   // Toute modification manuelle fait basculer l'item en isManual (protégé de la suppression auto).
@@ -114,7 +134,7 @@ export const updateGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
 
   const item = await prisma.groceryItem.update({
     where: { id },
-    data: { ...input, isManual: becameManual ? true : undefined },
+    data: { ...input, ...(nextPosition !== undefined ? { position: nextPosition } : {}), isManual: becameManual ? true : undefined },
   });
   emitFamilyInvalidation(familyId, ['grocery']);
   res.json(item);
@@ -181,4 +201,44 @@ export const unarchiveItems = asyncHandler(async (req: AuthedRequest, res: Respo
   });
   emitFamilyInvalidation(familyId, ['grocery']);
   res.json({ ok: true });
+});
+
+/**
+ * PUT /api/grocery-items/reorder — réordonnancement drag & drop.
+ * Positions absolues (rejeu offline idempotent) ; `aisle` permet de déplacer
+ * un item vers un autre rayon sans ouvrir la modale. Comme via la modale, un
+ * changement de rayon manuel fait basculer l'item en isManual. Un simple
+ * réordonnancement au sein du même rayon ne touche pas isManual.
+ */
+export const reorderGroceryItems = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const { items } = reorderItemsSchema.parse(req.body);
+
+  const ids = items.map((it) => it.id);
+  const existing = await prisma.groceryItem.findMany({ where: { familyId, id: { in: ids } } });
+  const existingById = new Map(existing.map((it) => [it.id, it]));
+
+  // Les items disparus entre-temps (édition concurrente, rejeu différé) sont ignorés.
+  const updates = items
+    .map((it) => {
+      const current = existingById.get(it.id);
+      if (!current) return null;
+      const aisleChanged = it.aisle !== current.aisle;
+      return {
+        where: { id: it.id },
+        data: {
+          aisle: it.aisle,
+          position: it.position,
+          // Déplacement manuel vers un autre rayon → protégé de la suppression auto.
+          ...(aisleChanged && !current.isManual ? { isManual: true } : {}),
+        },
+      };
+    })
+    .filter((u): u is NonNullable<typeof u> => u !== null);
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates.map((u) => prisma.groceryItem.update(u)));
+  }
+  emitFamilyInvalidation(familyId, ['grocery']);
+  res.json({ ok: true, updated: updates.length });
 });

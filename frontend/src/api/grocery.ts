@@ -29,18 +29,21 @@ function findCachedItem(id: string): GroceryItem | undefined {
 type GrocerySnapshots = {
   active?: GroceryListResponse;
   archived?: GroceryListResponse;
+  aisles?: GroceryAisle[];
 };
 
 function snapshotCaches(qc: ReturnType<typeof useQueryClient>): GrocerySnapshots {
   return {
     active: qc.getQueryData<GroceryListResponse>(queryKeys.grocery(false)),
     archived: qc.getQueryData<GroceryListResponse>(queryKeys.grocery(true)),
+    aisles: qc.getQueryData<GroceryAisle[]>(queryKeys.aisles),
   };
 }
 
 function restoreCaches(qc: ReturnType<typeof useQueryClient>, snap: GrocerySnapshots) {
   if (snap.active) qc.setQueryData(queryKeys.grocery(false), snap.active);
   if (snap.archived) qc.setQueryData(queryKeys.grocery(true), snap.archived);
+  if (snap.aisles) qc.setQueryData(queryKeys.aisles, snap.aisles);
 }
 
 function updateBothCaches(
@@ -107,6 +110,15 @@ export interface CreateGroceryItemInput {
   notes?: string | null;
 }
 
+/** Position d'insertion d'un nouvel item : en bas de son rayon (max + 1). */
+function nextPositionInCache(aisle: string): number {
+  const active = queryClient.getQueryData<GroceryListResponse>(queryKeys.grocery(false));
+  const positions = (active?.items ?? [])
+    .filter((it) => it.aisle === aisle && !it.archived)
+    .map((it) => it.position ?? -1); // ?? -1 : cache persisté antérieur au champ
+  return (positions.length > 0 ? Math.max(...positions) : -1) + 1;
+}
+
 export async function createGroceryItem(input: CreateGroceryItemInput): Promise<GroceryItem> {
   const now = new Date().toISOString();
   const item: GroceryItem = {
@@ -115,6 +127,9 @@ export async function createGroceryItem(input: CreateGroceryItemInput): Promise<
     quantity: input.quantity ?? 1,
     unit: input.unit,
     aisle: input.aisle,
+    // L'update optimiste du hook a déjà inséré l'item au cache → on réutilise
+    // sa position (le calcul reste identique quel que soit l'ordre d'appel).
+    position: findCachedItem(input.id)?.position ?? nextPositionInCache(input.aisle),
     store: input.store ?? null,
     isManual: true,
     checked: false,
@@ -235,6 +250,51 @@ export async function fetchAisles(): Promise<GroceryAisle[]> {
   return data;
 }
 
+// ── Réordonnancement drag & drop ──────────────────────────────
+
+export interface ReorderItemInput {
+  id: string;
+  aisle: string;
+  position: number;
+}
+
+/** PUT /grocery-items/reorder — positions absolues (rejeu offline idempotent). */
+export async function reorderGroceryItems(items: ReorderItemInput[]): Promise<{ ok: boolean }> {
+  return runOfflineAware({
+    method: 'put',
+    url: '/grocery-items/reorder',
+    body: { items },
+    invalidates: [['grocery']],
+    label: 'Réordonner la liste',
+    synthetic: () => ({ ok: true }),
+    request: async () => {
+      const { data } = await api.put<{ ok: boolean }>('/grocery-items/reorder', { items });
+      return data;
+    },
+  });
+}
+
+export interface ReorderAisleInput {
+  name: string;
+  sortOrder: number;
+}
+
+/** PUT /grocery-aisles/reorder — ordre absolu des cards rayon. */
+export async function reorderAisles(order: ReorderAisleInput[]): Promise<{ ok: boolean }> {
+  return runOfflineAware({
+    method: 'put',
+    url: '/grocery-aisles/reorder',
+    body: { order },
+    invalidates: [['aisles'], ['grocery']],
+    label: 'Réordonner les rayons',
+    synthetic: () => ({ ok: true }),
+    request: async () => {
+      const { data } = await api.put<{ ok: boolean }>('/grocery-aisles/reorder', { order });
+      return data;
+    },
+  });
+}
+
 // ── Hooks ────────────────────────────────────────────────────
 
 export function useGrocery(archived = false) {
@@ -285,6 +345,7 @@ export function useCreateGroceryItem() {
         quantity: input.quantity ?? 1,
         unit: input.unit,
         aisle: input.aisle,
+        position: nextPositionInCache(input.aisle),
         store: input.store ?? null,
         isManual: true,
         checked: false,
@@ -379,6 +440,61 @@ export function useUnarchiveItems() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
+  });
+}
+
+export function useReorderGroceryItems() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: reorderGroceryItems,
+    onMutate: async (items) => {
+      await qc.cancelQueries({ queryKey: ['grocery'] });
+      const snap = snapshotCaches(qc);
+      const patch = new Map(items.map((it) => [it.id, it]));
+      updateBothCaches(qc, (list) =>
+        list.map((it) => {
+          const p = patch.get(it.id);
+          return p ? { ...it, aisle: p.aisle, position: p.position } : it;
+        }),
+      );
+      return { snap };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.snap) restoreCaches(qc, ctx.snap);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+    },
+  });
+}
+
+export function useReorderAisles() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: reorderAisles,
+    onMutate: async (order) => {
+      await qc.cancelQueries({ queryKey: ['grocery'] });
+      const snap = snapshotCaches(qc);
+      const sortPatch = new Map(order.map((o) => [o.name, o.sortOrder]));
+      const patchAisles = (aisles: GroceryAisle[]) =>
+        aisles.map((a) =>
+          sortPatch.has(a.name) ? { ...a, sortOrder: sortPatch.get(a.name)! } : a,
+        );
+      for (const archived of [false, true]) {
+        const key = queryKeys.grocery(archived);
+        const old = qc.getQueryData<GroceryListResponse>(key);
+        if (old) qc.setQueryData<GroceryListResponse>(key, { ...old, aisles: patchAisles(old.aisles) });
+      }
+      if (snap.aisles) qc.setQueryData<GroceryAisle[]>(queryKeys.aisles, patchAisles(snap.aisles));
+      return { snap };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.snap) restoreCaches(qc, ctx.snap);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+      void qc.invalidateQueries({ queryKey: ['aisles'] });
     },
   });
 }

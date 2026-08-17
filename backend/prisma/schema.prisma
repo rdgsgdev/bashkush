@@ -200,6 +200,7 @@ model GroceryItem {
   quantity  Float // quantité totale affichée (authoritaire)
   unit      String
   aisle     String
+  position  Int      @default(0) // ordre manuel dans le rayon (égalité → tri alphabétique)
   store     String? // magasin (ex: maxi, iga…) — jamais rempli automatiquement par la planification
   isManual  Boolean  @default(false) @map("is_manual") // créé à la main → jamais auto-supprimé
   checked   Boolean  @default(false) // acheté / déjà possédé

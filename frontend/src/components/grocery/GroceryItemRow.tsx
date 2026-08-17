@@ -12,39 +12,16 @@ interface GroceryItemRowProps {
   archived?: boolean;
 }
 
-export function GroceryItemRow({
+/** Contenu visuel d'une ligne (réutilisé par la variante draggable et l'overlay). */
+export function GroceryItemRowContent({
   item,
   onToggleCheck,
-  onEdit,
   onDelete,
   onUnarchive,
   archived,
-}: GroceryItemRowProps) {
-  // Ligne cliquable → édition (les lignes archivées ne s'éditent pas).
-  const canEdit = Boolean(onEdit) && !archived;
-
+}: Omit<GroceryItemRowProps, 'onEdit'>) {
   return (
-    <li
-      onClick={canEdit ? () => onEdit?.(item) : undefined}
-      onKeyDown={
-        canEdit
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onEdit?.(item);
-              }
-            }
-          : undefined
-      }
-      role={canEdit ? 'button' : undefined}
-      tabIndex={canEdit ? 0 : undefined}
-      aria-label={canEdit ? `Modifier ${item.name}` : undefined}
-      className={cn(
-        'flex items-center gap-3 px-3 py-2.5 transition',
-        item.checked && !archived && 'opacity-50',
-        canEdit && 'cursor-pointer hover:bg-stone-50',
-      )}
-    >
+    <>
       {archived ? (
         <button
           onClick={() => onUnarchive?.(item.id)}
@@ -104,6 +81,50 @@ export function GroceryItemRow({
           </button>
         )}
       </div>
+    </>
+  );
+}
+
+export function GroceryItemRow({
+  item,
+  onToggleCheck,
+  onEdit,
+  onDelete,
+  onUnarchive,
+  archived,
+}: GroceryItemRowProps) {
+  // Ligne cliquable → édition (les lignes archivées ne s'éditent pas).
+  const canEdit = Boolean(onEdit) && !archived;
+
+  return (
+    <li
+      onClick={canEdit ? () => onEdit?.(item) : undefined}
+      onKeyDown={
+        canEdit
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onEdit?.(item);
+              }
+            }
+          : undefined
+      }
+      role={canEdit ? 'button' : undefined}
+      tabIndex={canEdit ? 0 : undefined}
+      aria-label={canEdit ? `Modifier ${item.name}` : undefined}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 transition',
+        item.checked && !archived && 'opacity-50',
+        canEdit && 'cursor-pointer hover:bg-stone-50',
+      )}
+    >
+      <GroceryItemRowContent
+        item={item}
+        onToggleCheck={onToggleCheck}
+        onDelete={onDelete}
+        onUnarchive={onUnarchive}
+        archived={archived}
+      />
     </li>
   );
 }

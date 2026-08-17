@@ -116,6 +116,7 @@ export interface GroceryItem {
   quantity: number;
   unit: string;
   aisle: string;
+  position: number; // ordre manuel dans le rayon (égalité → tri alphabétique)
   store?: string | null; // magasin (clé de STORE_LABELS) — jamais rempli par la planification
   isManual: boolean;
   checked: boolean;

@@ -38,6 +38,35 @@ export const unarchiveSchema = z.object({
   ids: z.array(z.string()).optional(), // si absent → tout désarchiver
 });
 
+// Body de PUT /grocery-items/reorder — positions absolues par item (rejeu
+// offline idempotent). `aisle` permet de déplacer l'item vers un autre rayon
+// sans passer par la modale d'édition (drag & drop).
+export const reorderItemsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        aisle: z.string().min(1),
+        position: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+});
+export type ReorderItemsInput = z.infer<typeof reorderItemsSchema>;
+
+// Body de PUT /grocery-aisles/reorder — ordre absolu des rayons visibles.
+export const reorderAislesSchema = z.object({
+  order: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        sortOrder: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+});
+export type ReorderAislesInput = z.infer<typeof reorderAislesSchema>;
+
 export const createAisleSchema = z.object({
   name: z.string().min(1).max(60),
   label: z.string().optional(),

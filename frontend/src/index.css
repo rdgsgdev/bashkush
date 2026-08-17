@@ -62,3 +62,25 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ── Drag & drop liste de courses ───────────────────────────── */
+
+/* Élément « détaché » flottant au-dessus des autres (DragOverlay) :
+   décollage avec léger grossissement + inclinaison, puis maintien. */
+@keyframes drag-detach {
+  from {
+    transform: scale(1) rotate(0deg);
+  }
+  to {
+    transform: scale(1.045) rotate(1.2deg);
+  }
+}
+.drag-overlay {
+  animation: drag-detach 160ms cubic-bezier(0.2, 0, 0.4, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drag-overlay {
+    animation: none;
+    transform: scale(1.045) rotate(1.2deg);
+  }
+}
