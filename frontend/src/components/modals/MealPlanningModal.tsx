@@ -5,14 +5,15 @@ import { Button } from '../ui/Button';
 import { Field, Select } from '../ui/FormControl';
 import { NumberStepper } from '../ui/NumberStepper';
 import { MealCarousel } from '../meals/MealCarousel';
-import { STATUS_OPTIONS } from '../../lib/options';
+import { DateRangePicker } from '../calendar/DateRangePicker';
+import { STATUS_OPTIONS, MEAL_TYPE_OPTIONS } from '../../lib/options';
 import { todayValue, cn, formatQty } from '../../lib/utils';
 import { useCreateMealPlan, useUpdateMealPlan, useDeleteMealPlan } from '../../api/mealPlans';
 import type { IngredientSelection } from '../../api/mealPlans';
 import { useMeals } from '../../api/meals';
 import { useConnection } from '../../hooks/useConnection';
 import { AISLE_LABELS, AISLE_OPTIONS } from '../../types';
-import type { Ingredient, Meal, MealPlan, MealPlanStatus } from '../../types';
+import type { Ingredient, Meal, MealPlan, MealPlanStatus, MealType } from '../../types';
 
 interface MealPlanningModalProps {
   plan?: MealPlan | null; // null = création
@@ -21,6 +22,8 @@ interface MealPlanningModalProps {
   onClose: () => void;
   /** Date par défaut en création (ex: jour sélectionné dans le calendrier). */
   defaultDate?: string;
+  /** Plat présélectionné en création (ex: bouton « Planifier » sur la fiche d'un plat). */
+  defaultMealId?: string;
 }
 
 /**
@@ -30,7 +33,7 @@ interface MealPlanningModalProps {
 const toDateOnly = (iso?: string | null): string | undefined =>
   iso ? iso.slice(0, 10) : undefined;
 
-export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlanningModalProps) {
+export function MealPlanningModal({ plan, open, onClose, defaultDate, defaultMealId }: MealPlanningModalProps) {
   const isEdit = Boolean(plan);
   const fallback = defaultDate ?? todayValue();
   const [mealId, setMealId] = useState<string>(plan?.mealId ?? '');
@@ -38,6 +41,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
   const [toDate, setToDate] = useState<string>(toDateOnly(plan?.toDate) ?? fallback);
   const [servings, setServings] = useState<number>(plan?.servings ?? 2);
   const [status, setStatus] = useState<MealPlanStatus>((plan?.status ?? 'a_faire') as MealPlanStatus);
+  const [mealType, setMealType] = useState<MealType | ''>((plan?.mealType ?? '') as MealType | '');
   const [error, setError] = useState<string | null>(null);
   // Étape 2 : sélection des ingrédients à envoyer en liste de courses.
   const [step, setStep] = useState<1 | 2>(1);
@@ -74,17 +78,18 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
   useEffect(() => {
     if (open) {
       const fb = defaultDate ?? todayValue();
-      setMealId(plan?.mealId ?? '');
+      setMealId(plan?.mealId ?? defaultMealId ?? '');
       setFromDate(toDateOnly(plan?.fromDate) ?? fb);
       setToDate(toDateOnly(plan?.toDate) ?? fb);
       setServings(plan?.servings ?? 2);
       setStatus((plan?.status ?? 'a_faire') as MealPlanStatus);
+      setMealType((plan?.mealType ?? '') as MealType | '');
       setError(null);
       setStep(1);
       setUnchecked(new Set());
       setQtyOverrides({});
     }
-  }, [open, plan, defaultDate]);
+  }, [open, plan, defaultDate, defaultMealId]);
 
   // Changement de plat pendant la session : sélection par défaut. En édition du
   // plat d'origine, on restaure la mémoire (ingrédients déjà contributionnés).
@@ -119,6 +124,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
             toDate,
             servings,
             status,
+            mealType: mealType || null,
             // Sans sélection (édition sans changement portions/plat), le backend
             // ne touche pas aux contributions existantes.
             ...(selections ? { ingredients: selections } : {}),
@@ -131,6 +137,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
           toDate,
           servings,
           status,
+          mealType: mealType || null,
           ingredients: selections ?? [],
         });
       }
@@ -256,41 +263,52 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
 
       <div>
         <label className="label">Choisissez un plat</label>
-        <MealCarousel selectedId={mealId} onSelect={(m) => setMealId(m.id)} />
+        <MealCarousel
+          selectedId={mealId}
+          onSelect={(m) => setMealId(m.id)}
+          scrollToId={plan?.mealId ?? defaultMealId}
+        />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Du">
-          <input
-            type="date"
-            className="field min-w-0"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-          />
-        </Field>
-        <Field label="Au">
-          <input
-            type="date"
-            className="field min-w-0"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-          />
-        </Field>
-      </div>
+      <Field label="Jour(s) planifié(s)">
+        <DateRangePicker
+          from={fromDate}
+          to={toDate}
+          onChange={(f, t) => {
+            setFromDate(f);
+            setToDate(t);
+          }}
+        />
+      </Field>
 
       <Field label="Portions">
         <NumberStepper value={servings} min={1} max={10} onChange={setServings} />
       </Field>
 
-      <Field label="Statut">
-        <Select value={status} onChange={(e) => setStatus(e.target.value as MealPlanStatus)}>
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Type de repas">
+          <Select
+            value={mealType}
+            onChange={(e) => setMealType(e.target.value as MealType | '')}
+          >
+            <option value="">—</option>
+            {MEAL_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Statut">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as MealPlanStatus)}>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
       <p className="rounded-xl bg-brand-50 px-3 py-2.5 text-xs text-brand-700">
         ℹ️ À l'étape suivante, vous choisirez les ingrédients à ajouter à votre liste de courses

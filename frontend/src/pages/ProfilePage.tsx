@@ -478,14 +478,16 @@ export function ProfilePage() {
           Profil enregistré ✓
         </div>
       )}
+      </main>
 
-      <div className="mt-4 pb-6">
+      {/* Barre d'action fixe en bas (même pattern que les footers de modales) —
+          reste visible pendant le défilement. */}
+      <footer className="sticky bottom-0 z-30 border-t border-stone-200 bg-white px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
         <Button onClick={handleSave} loading={saveProfile.isPending} className="w-full">
           <Save className="h-4 w-4" />
           Enregistrer
         </Button>
-      </div>
-      </main>
+      </footer>
     </div>
   );
 }

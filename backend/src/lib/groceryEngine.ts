@@ -55,14 +55,16 @@ export async function planMeal(
     toDate: Date;
     servings: number;
     status: string;
+    /** Moment de consommation (petit_dej | dejeuner | diner | collation). */
+    mealType?: string | null;
     /** Si fourni, seuls ces ingrédients sont ajoutés, avec ces quantités. */
     ingredientSelections?: IngredientSelections;
   },
 ): Promise<MealPlan> {
-  const { meal, familyId, fromDate, toDate, servings, status, ingredientSelections } = params;
+  const { meal, familyId, fromDate, toDate, servings, status, mealType, ingredientSelections } = params;
 
   const plan = await tx.mealPlan.create({
-    data: { familyId, mealId: meal.id, fromDate, toDate, servings, status },
+    data: { familyId, mealId: meal.id, fromDate, toDate, servings, status, mealType: mealType ?? null },
   });
 
   await addContributions(tx, {
@@ -235,6 +237,8 @@ export async function updateMealPlan(
     toDate?: Date;
     servings?: number;
     status?: string;
+    /** Moment de consommation (null = effacer). */
+    mealType?: string | null;
     /** Si fourni, recalcule les contributions avec cette sélection utilisateur. */
     ingredientSelections?: IngredientSelections;
   },
@@ -254,7 +258,12 @@ export async function updateMealPlan(
   if (input.fromDate) data.fromDate = input.fromDate;
   if (input.toDate) data.toDate = input.toDate;
   if (input.status) data.status = input.status;
-  if (mealChanged) data.meal = { connect: { id: meal.id } };
+  if (input.mealType !== undefined) data.mealType = input.mealType;
+  if (mealChanged) {
+    data.meal = { connect: { id: meal.id } };
+    // Les étapes cochées se rapportent à l'ancien plat → on repart de zéro.
+    data.completedSteps = [];
+  }
   if (servingsChanged) data.servings = input.servings;
 
   if (servingsChanged || mealChanged) {

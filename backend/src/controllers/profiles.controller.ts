@@ -6,6 +6,8 @@ import { AuthedRequest } from '../middleware/auth';
 import { saveProfileSchema } from '../schemas/profile.schema';
 import { deleteImage, uploadImage } from '../lib/storage';
 import { computeDailyTargets } from '../lib/nutrition';
+import { ensureFamilyId } from '../lib/family';
+import { emitFamilyInvalidation } from '../realtime/io';
 
 /** Profil de l'utilisateur connecté (ou `{ onboarded: false }` s'il n'existe pas encore). */
 export const getProfile = asyncHandler(async (req: AuthedRequest, res: Response) => {
@@ -73,6 +75,9 @@ export const saveProfile = asyncHandler(async (req: AuthedRequest, res: Response
     update: data,
     create: { ...data, userId, onboardedAt: new Date() },
   });
+  // Le nom/photo du membre apparaissent dans les vues « famille » des autres.
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email).catch(() => null);
+  if (familyId) emitFamilyInvalidation(familyId, ['family']);
   res.json(profile);
 });
 

@@ -1,7 +1,23 @@
 // ── Types partagés (miroir des modèles Prisma du backend) ────
 
 export type Difficulty = 'facile' | 'moyen' | 'difficile';
-export type Category = 'midi' | 'soir' | 'collation' | 'autre';
+/** Type de plat (nature de la recette — le moment du repas est sur la planification). */
+export type Category =
+  | 'bowl'
+  | 'wrap'
+  | 'salad'
+  | 'soup'
+  | 'sandwich'
+  | 'pasta'
+  | 'stir_fry'
+  | 'dessert'
+  | 'smoothie'
+  | 'snack_food'
+  | 'side'
+  | 'main'
+  | 'beverage';
+/** Moment de consommation d'un repas planifié. */
+export type MealType = 'petit_dejeuner' | 'brunch' | 'diner' | 'souper' | 'collation';
 export type MealPlanStatus = 'a_faire' | 'en_preparation' | 'prepare';
 
 export interface Nutrition {
@@ -82,6 +98,10 @@ export interface MealPlan {
   toDate: string;
   servings: number;
   status: MealPlanStatus;
+  /** Moment de consommation (petit_dejeuner | brunch | diner | souper | collation). */
+  mealType?: MealType | null;
+  /** Numéros des étapes de préparation cochées — partagés entre membres. */
+  completedSteps: number[];
   createdAt: string;
   updatedAt: string;
   meal: Meal;
@@ -125,10 +145,27 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
-  midi: 'Midi',
-  soir: 'Soir',
+  bowl: 'Bowl',
+  wrap: 'Wrap',
+  salad: 'Salade',
+  soup: 'Soupe',
+  sandwich: 'Sandwich',
+  pasta: 'Pâtes',
+  stir_fry: 'Sauté',
+  dessert: 'Dessert',
+  smoothie: 'Smoothie',
+  snack_food: 'Snack',
+  side: 'Accompagnement',
+  main: 'Plat principal',
+  beverage: 'Boisson',
+};
+
+export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  petit_dejeuner: 'Petit-déjeuner',
+  brunch: 'Brunch',
+  diner: 'Dîner',
+  souper: 'Souper',
   collation: 'Collation',
-  autre: 'Autre',
 };
 
 export const STATUS_LABELS: Record<MealPlanStatus, string> = {

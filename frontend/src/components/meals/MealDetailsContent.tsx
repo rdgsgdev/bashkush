@@ -81,7 +81,9 @@ export function MealDetailsContent({
         )}
         {meal.category && (
           <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">
-            {CATEGORY_LABELS[meal.category]}
+            {/* Fallback brut : les caches persistés peuvent encore porter
+                d'anciennes valeurs (midi/soir…) le temps d'un refetch. */}
+            {CATEGORY_LABELS[meal.category] ?? meal.category}
           </span>
         )}
       </div>

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../prisma';
 import { asyncHandler, HttpError } from '../middleware/error';
 import { ensureFamilyId } from '../lib/family';
+import { emitFamilyInvalidation } from '../realtime/io';
 import { AuthedRequest } from '../middleware/auth';
 import {
   createGroceryItemSchema,
@@ -78,6 +79,7 @@ export const createGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
     }
     throw err;
   }
+  emitFamilyInvalidation(familyId, ['grocery']);
   res.status(201).json(item);
 });
 
@@ -112,6 +114,7 @@ export const updateGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
     where: { id },
     data: { ...input, isManual: becameManual ? true : undefined },
   });
+  emitFamilyInvalidation(familyId, ['grocery']);
   res.json(item);
 });
 
@@ -123,6 +126,7 @@ export const deleteGroceryItem = asyncHandler(async (req: AuthedRequest, res: Re
   if (!existing) throw new HttpError(404, 'Item introuvable');
   // On supprime aussi les contributions (cascade) — l'item est retiré manuellement.
   await prisma.groceryItem.delete({ where: { id } });
+  emitFamilyInvalidation(familyId, ['grocery']);
   res.status(204).send();
 });
 
@@ -141,6 +145,7 @@ export const toggleCheck = asyncHandler(async (req: AuthedRequest, res: Response
     where: { id },
     data: { checked: checked ?? !existing.checked },
   });
+  emitFamilyInvalidation(familyId, ['grocery']);
   res.json(item);
 });
 
@@ -160,6 +165,7 @@ export const archiveItems = asyncHandler(async (req: AuthedRequest, res: Respons
       data: { archived: true, checked: false },
     });
   }
+  emitFamilyInvalidation(familyId, ['grocery']);
   res.json({ ok: true });
 });
 
@@ -171,5 +177,6 @@ export const unarchiveItems = asyncHandler(async (req: AuthedRequest, res: Respo
     where: { familyId, archived: true, ...(ids ? { id: { in: ids } } : {}) },
     data: { archived: false },
   });
+  emitFamilyInvalidation(familyId, ['grocery']);
   res.json({ ok: true });
 });

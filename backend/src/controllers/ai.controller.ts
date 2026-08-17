@@ -69,6 +69,23 @@ const MEAL_FREQUENCY_LABELS: Record<string, string> = {
   autre: 'autre',
 };
 
+// Libellés FR des types de plat (contrainte lisible dans le prompt).
+const CATEGORY_PROMPT_LABELS: Record<string, string> = {
+  bowl: 'bol (bowl)',
+  wrap: 'wrap',
+  salad: 'salade',
+  soup: 'soupe',
+  sandwich: 'sandwich',
+  pasta: 'pâtes',
+  stir_fry: 'sauté au wok (stir-fry)',
+  dessert: 'dessert',
+  smoothie: 'smoothie',
+  snack_food: 'collation (snack)',
+  side: 'accompagnement',
+  main: 'plat principal',
+  beverage: 'boisson',
+};
+
 // ── Schéma JSON attendu de l'IA (structured outputs) ─────────
 // Tous les champs sont requis et typés simplement (le modèle met
 // 0 ou chaîne vide quand l'info n'a pas de sens) ; la
@@ -94,7 +111,17 @@ const mealJsonSchema = {
     cookTime: { type: 'integer', description: 'Temps de cuisson en minutes (0 si aucun)' },
     totalTime: { type: 'integer', description: 'Temps total en minutes' },
     difficulty: { type: 'string', enum: ['facile', 'moyen', 'difficile'] },
-    category: { type: 'string', enum: ['midi', 'soir', 'collation', 'autre'] },
+    category: {
+      type: 'string',
+      enum: [
+        'bowl', 'wrap', 'salad', 'soup', 'sandwich', 'pasta', 'stir_fry',
+        'dessert', 'smoothie', 'snack_food', 'side', 'main', 'beverage',
+      ],
+      description:
+        'Type de plat : bowl (bol), wrap, salad (salade), soup (soupe), sandwich, ' +
+        'pasta (pâtes), stir_fry (sauté/wok), dessert, smoothie, snack_food (collation salée/sucée), ' +
+        'side (accompagnement), main (plat principal), beverage (boisson)',
+    },
     nutrition: {
       type: 'object',
       additionalProperties: false,
@@ -284,7 +311,9 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 
   const constraints: string[] = [];
   if (request.difficulty) constraints.push(`Difficulté souhaitée : ${request.difficulty}.`);
-  if (request.category) constraints.push(`Catégorie : ${request.category}.`);
+  if (request.category) {
+    constraints.push(`Type de plat : ${CATEGORY_PROMPT_LABELS[request.category]}.`);
+  }
   if (request.desiredIngredients?.length) {
     constraints.push(`Ingrédients souhaités (doivent apparaître dans la recette) : ${request.desiredIngredients.join(', ')}.`);
   }
@@ -297,9 +326,8 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
         `L'utilisateur demande la modification suivante : « ${request.feedback} »\n` +
         `Régénère le plat complet (même format JSON) en appliquant cette consigne, ` +
         `en conservant les éléments qui ne sont pas concernés par la modification.\n` +
-        `ATTENTION : le nom ne fait pas partie des éléments à conserver tel quel — ` +
-        `régénère-le selon la convention de nommage (nom original de restaurant, très court, ` +
-        `sans type générique), en accord avec la composition modifiée du plat.`,
+        `ATTENTION : conserve EXACTEMENT le nom du plat actuel (champ name), ` +
+        `caractère pour caractère — le nom ne doit jamais changer lors d'une modification.`,
     );
   }
 
@@ -309,7 +337,12 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 // ── Normalisation de la réponse en CreateMealInput ───────────
 
 /** 0 / chaîne vide → null ; ids d'ingrédients générés et uniques. */
-function normalizeMeal(ai: z.infer<typeof aiMealResponseSchema>, servings: number): CreateMealInput {
+function normalizeMeal(
+  ai: z.infer<typeof aiMealResponseSchema>,
+  servings: number,
+  /** Modification d'un plat existant : le nom est imposé (jamais régénéré). */
+  previousName?: string | null,
+): CreateMealInput {
   const usedIds = new Set<string>();
   const ingredients = ai.ingredients.map((ing) => {
     let id = slugify(ing.name);
@@ -330,7 +363,8 @@ function normalizeMeal(ai: z.infer<typeof aiMealResponseSchema>, servings: numbe
   });
 
   return {
-    name: ai.name,
+    // Modification : on impose le nom existant, peu importe la réponse IA.
+    name: previousName?.trim() || ai.name,
     description: ai.description.trim() || null,
     // On impose les portions demandées (peu importe ce que l'IA renvoie).
     servings,
@@ -384,7 +418,7 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
     throw new HttpError(502, 'Le plat généré par l’IA est incomplet, réessaie');
   }
 
-  res.json({ meal: normalizeMeal(parsed.data, request.servings) });
+  res.json({ meal: normalizeMeal(parsed.data, request.servings, request.previousMeal?.name) });
 });
 
 // ── Complétion des apports d'un ingrédient (ajout manuel) ────

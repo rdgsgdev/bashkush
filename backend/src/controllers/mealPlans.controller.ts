@@ -2,11 +2,13 @@ import { prisma } from '../prisma';
 import { asyncHandler, HttpError } from '../middleware/error';
 import { run, planMeal, updateMealPlan, deleteMealPlan } from '../lib/groceryEngine';
 import { ensureFamilyId } from '../lib/family';
+import { emitFamilyInvalidation } from '../realtime/io';
 import { AuthedRequest } from '../middleware/auth';
 import {
   createMealPlanSchema,
   updateMealPlanSchema,
   updateStatusSchema,
+  updateStepsSchema,
 } from '../schemas/mealPlan.schema';
 import type { Ingredient, Meal } from '@prisma/client';
 import type { Response } from 'express';
@@ -91,6 +93,7 @@ export const createMealPlan = asyncHandler(async (req: AuthedRequest, res: Respo
       toDate: input.toDate,
       servings: input.servings,
       status: input.status,
+      mealType: input.mealType,
       ingredientSelections: input.ingredients,
     }),
   );
@@ -99,6 +102,7 @@ export const createMealPlan = asyncHandler(async (req: AuthedRequest, res: Respo
     where: { id: plan.id },
     include: planInclude,
   });
+  emitFamilyInvalidation(familyId, ['mealPlans', 'grocery']);
   res.status(201).json(result);
 });
 
@@ -133,6 +137,7 @@ export const updateMealPlanCtrl = asyncHandler(async (req: AuthedRequest, res: R
   );
 
   const result = await prisma.mealPlan.findUniqueOrThrow({ where: { id }, include: planInclude });
+  emitFamilyInvalidation(familyId, ['mealPlans', 'grocery']);
   res.json(result);
 });
 
@@ -148,6 +153,42 @@ export const updateStatus = asyncHandler(async (req: AuthedRequest, res: Respons
     data: { status },
     include: planInclude,
   });
+  emitFamilyInvalidation(familyId, ['mealPlans']);
+  res.json(updated);
+});
+
+/**
+ * PATCH /api/meal-plans/:id/steps — enregistre les étapes cochées (valeur
+ * absolue, idempotent) et dérive le statut côté serveur. Source de vérité
+ * partagée : tous les membres de la famille voient les mêmes coches.
+ */
+export const updateSteps = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const { completedSteps } = updateStepsSchema.parse(req.body);
+  const id = req.params.id;
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const existing = await prisma.mealPlan.findFirst({
+    where: { id, familyId },
+    include: { meal: { include: { steps: { select: { stepNumber: true } } } } },
+  });
+  if (!existing) throw new HttpError(404, 'Plan introuvable');
+
+  const total = existing.meal.steps.length;
+  const valid = [...new Set(completedSteps)].filter((n) => n >= 1 && n <= total);
+  const status =
+    total === 0
+      ? existing.status
+      : valid.length === 0
+        ? 'a_faire'
+        : valid.length >= total
+          ? 'prepare'
+          : 'en_preparation';
+
+  const updated = await prisma.mealPlan.update({
+    where: { id },
+    data: { completedSteps: valid, status },
+    include: planInclude,
+  });
+  emitFamilyInvalidation(familyId, ['mealPlans']);
   res.json(updated);
 });
 
@@ -158,5 +199,6 @@ export const deleteMealPlanCtrl = asyncHandler(async (req: AuthedRequest, res: R
   const existing = await prisma.mealPlan.findFirst({ where: { id, familyId } });
   if (!existing) throw new HttpError(404, 'Plan introuvable');
   await run(prisma, (tx) => deleteMealPlan(tx, id));
+  emitFamilyInvalidation(familyId, ['mealPlans', 'grocery']);
   res.status(204).send();
 });

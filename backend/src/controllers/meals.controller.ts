@@ -5,6 +5,7 @@ import { generateMealId } from '../lib/id';
 import { uploadImage, deleteImage } from '../lib/storage';
 import { run } from '../lib/groceryEngine';
 import { ensureFamilyId } from '../lib/family';
+import { emitFamilyInvalidation } from '../realtime/io';
 import { AuthedRequest } from '../middleware/auth';
 import type { Response } from 'express';
 
@@ -130,6 +131,7 @@ export const createMeal = asyncHandler(async (req: AuthedRequest, res: Response)
     data: { id, familyId, ...buildMealData(input) },
     include: mealInclude,
   });
+  emitFamilyInvalidation(familyId, ['meals']);
   res.status(201).json(meal);
 });
 
@@ -154,6 +156,8 @@ export const updateMeal = asyncHandler(async (req: AuthedRequest, res: Response)
     return tx.meal.update({ where: { id }, data: buildMealData(input, existing.servings), include: mealInclude });
   });
 
+  // Un plat édité apparaît aussi dans les planifications (nom, image, étapes…).
+  emitFamilyInvalidation(familyId, ['meals', 'mealPlans']);
   res.json(meal);
 });
 
@@ -166,6 +170,8 @@ export const deleteMeal = asyncHandler(async (req: AuthedRequest, res: Response)
 
   await deleteImage(meal.imagePath);
   await prisma.meal.delete({ where: { id } });
+  // Les planifications liées disparaissent en cascade → liste impactée aussi.
+  emitFamilyInvalidation(familyId, ['meals', 'mealPlans', 'grocery']);
   res.status(204).send();
 });
 
@@ -184,6 +190,7 @@ export const toggleFavorite = asyncHandler(async (req: AuthedRequest, res: Respo
     where: { id },
     data: { isFavorite: isFavorite ?? !meal.isFavorite },
   });
+  emitFamilyInvalidation(familyId, ['meals']);
   res.json(updated);
 });
 
@@ -204,5 +211,6 @@ export const uploadMealImage = asyncHandler(async (req: AuthedRequest, res: Resp
     where: { id },
     data: { imageUrl: url, imagePath: path },
   });
+  emitFamilyInvalidation(familyId, ['meals', 'mealPlans']);
   res.json(updated);
 });

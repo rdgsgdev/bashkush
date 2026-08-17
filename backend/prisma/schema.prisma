@@ -116,7 +116,7 @@ model Meal {
   cookTime    Int?     @map("cook_time")
   totalTime   Int?     @map("total_time")
   difficulty  String? // facile | moyen | difficile
-  category    String? // midi | soir | collation | autre
+  category    String? // type de plat : bowl | wrap | salad | soup | sandwich | pasta | stir_fry | dessert | smoothie | snack_food | side | main | beverage
   nutrition   Json? // { calories, protein, carbs, fat, fiber }
   notes       String?
   isFavorite  Boolean  @default(false) @map("is_favorite")
@@ -175,6 +175,11 @@ model MealPlan {
   toDate   DateTime @map("to_date")
   servings Int      @default(2) // 1..10
   status   String   @default("a_faire") // a_faire | en_preparation | prepare
+  // Moment de consommation du repas planifié.
+  mealType String?  @map("meal_type") // petit_dejeuner | brunch | diner | souper | collation
+  // Numéros des étapes de préparation cochées (partagées entre membres de
+  // la famille) — le statut est dérivé de ce tableau côté serveur.
+  completedSteps Int[] @default([]) @map("completed_steps")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

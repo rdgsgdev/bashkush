@@ -1,6 +1,7 @@
 import { prisma } from '../prisma';
 import { asyncHandler, HttpError } from '../middleware/error';
 import { createAisleSchema, updateAisleSchema } from '../schemas/grocery.schema';
+import { emitAllInvalidation } from '../realtime/io';
 import type { Response } from 'express';
 
 /** GET /api/grocery-aisles */
@@ -15,6 +16,7 @@ export const createAisle = asyncHandler(async (req, res: Response) => {
   const aisle = await prisma.groceryAisle.create({
     data: { name: input.name, label: input.label ?? input.name, sortOrder: input.sortOrder ?? 999 },
   });
+  emitAllInvalidation(['aisles', 'grocery']);
   res.status(201).json(aisle);
 });
 
@@ -25,6 +27,7 @@ export const updateAisle = asyncHandler(async (req, res: Response) => {
   const existing = await prisma.groceryAisle.findUnique({ where: { name } });
   if (!existing) throw new HttpError(404, 'Rayon introuvable');
   const aisle = await prisma.groceryAisle.update({ where: { name }, data: input });
+  emitAllInvalidation(['aisles', 'grocery']);
   res.json(aisle);
 });
 
@@ -34,5 +37,6 @@ export const deleteAisle = asyncHandler(async (req, res: Response) => {
   const existing = await prisma.groceryAisle.findUnique({ where: { name } });
   if (!existing) throw new HttpError(404, 'Rayon introuvable');
   await prisma.groceryAisle.delete({ where: { name } });
+  emitAllInvalidation(['aisles', 'grocery']);
   res.status(204).send();
 });

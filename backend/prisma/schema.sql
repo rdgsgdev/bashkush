@@ -99,6 +99,8 @@ CREATE TABLE "meal_plans" (
     "to_date" TIMESTAMP(3) NOT NULL,
     "servings" INTEGER NOT NULL DEFAULT 2,
     "status" TEXT NOT NULL DEFAULT 'a_faire',
+    "meal_type" TEXT,
+    "completed_steps" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 

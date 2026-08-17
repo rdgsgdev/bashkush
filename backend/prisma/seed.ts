@@ -27,7 +27,7 @@ const bolMediterraneen = {
   cookTime: 30,
   totalTime: 50,
   difficulty: 'facile',
-  category: 'soir',
+  category: 'bowl',
   isFavorite: true,
   nutrition: { calories: 520, protein: 28, carbs: 48, fat: 24, fiber: 9 },
   notes: "Les légumes peuvent être rôtis à l'avance et conservés 2-3 jours au frigo. La polenta se réchauffe bien avec un peu d'eau ou de lait. Les sardines apportent des omega-3 excellents pour la récupération.",
@@ -77,7 +77,7 @@ const porridgeAmande = {
   cookTime: 8,
   totalTime: 13,
   difficulty: 'facile',
-  category: 'midi',
+  category: 'bowl',
   isFavorite: false,
   nutrition: { calories: 420, protein: 14, carbs: 62, fat: 13, fiber: 8 },
   ingredients: [
@@ -105,7 +105,7 @@ const saladeQuinoa = {
   cookTime: 15,
   totalTime: 30,
   difficulty: 'facile',
-  category: 'midi',
+  category: 'salad',
   isFavorite: false,
   nutrition: { calories: 480, protein: 16, carbs: 52, fat: 22, fiber: 9 },
   ingredients: [

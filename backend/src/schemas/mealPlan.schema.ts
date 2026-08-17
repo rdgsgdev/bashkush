@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export const mealPlanStatusEnum = z.enum(['a_faire', 'en_preparation', 'prepare']);
 
+/** Moment de consommation du repas planifié. */
+export const mealTypeEnum = z.enum(['petit_dejeuner', 'brunch', 'diner', 'souper', 'collation']);
+
 /**
  * Sélection d'ingrédients faite par l'utilisateur dans la modale de
  * planification (étape 2). `quantity` est la quantité FINALE (déjà mise à
@@ -22,6 +25,7 @@ export const createMealPlanSchema = z.object({
   toDate: z.coerce.date(),
   servings: z.number().int().min(1).max(10).optional().default(2),
   status: mealPlanStatusEnum.optional().default('a_faire'),
+  mealType: mealTypeEnum.optional().nullable(),
   ingredients: ingredientSelectionSchema.optional(),
 });
 export type CreateMealPlanInput = z.infer<typeof createMealPlanSchema>;
@@ -32,10 +36,21 @@ export const updateMealPlanSchema = z.object({
   toDate: z.coerce.date().optional(),
   servings: z.number().int().min(1).max(10).optional(),
   status: mealPlanStatusEnum.optional(),
+  mealType: mealTypeEnum.optional().nullable(),
   ingredients: ingredientSelectionSchema.optional(),
 });
 export type UpdateMealPlanInput = z.infer<typeof updateMealPlanSchema>;
 
 export const updateStatusSchema = z.object({
   status: mealPlanStatusEnum,
+});
+
+/**
+ * PATCH /api/meal-plans/:id/steps — étapes de préparation cochées.
+ * `completedSteps` est la valeur FINALE (liste absolue de numéros d'étapes),
+ * ce qui rend l'appel idempotent (même pattern que grocery check offline).
+ * Le statut du plan est dérivé côté serveur depuis ce tableau.
+ */
+export const updateStepsSchema = z.object({
+  completedSteps: z.array(z.number().int().min(1)).max(100),
 });

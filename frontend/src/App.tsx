@@ -6,6 +6,7 @@ import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
 import { queryClient } from './queryClient';
 import { initConnection } from './offline/connection';
+import { LiveSyncInitializer } from './realtime/LiveSyncInitializer';
 
 /** Restaure la session au chargement puis suit les changements d'état d'auth. */
 function AuthInitializer() {
@@ -38,6 +39,7 @@ export default function App() {
       <BrowserRouter>
         <AuthInitializer />
         <ConnectionInitializer />
+        <LiveSyncInitializer />
         <AppRouter />
       </BrowserRouter>
     </QueryClientProvider>

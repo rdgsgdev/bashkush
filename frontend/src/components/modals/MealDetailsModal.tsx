@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { CalendarPlus, Pencil } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { MealDetailsContent } from '../meals/MealDetailsContent';
 import { usePlanStepProgress } from '../../hooks/usePlanStepProgress';
-import { useUpdatePlanStatus } from '../../api/mealPlans';
-import type { Meal, MealPlan, MealPlanStatus } from '../../types';
+import type { Meal, MealPlan } from '../../types';
 
 interface MealDetailsModalProps {
   open: boolean;
@@ -16,6 +15,8 @@ interface MealDetailsModalProps {
   /** Contexte simple (liste des plats) : lecture seule + modif du plat. */
   meal?: Meal | null;
   onEditMeal?: (mealId: string) => void;
+  /** Contexte simple (liste des plats) : planifier ce plat. */
+  onPlanMeal?: (mealId: string) => void;
 }
 
 export function MealDetailsModal({
@@ -25,13 +26,15 @@ export function MealDetailsModal({
   onEditPlanning,
   meal: mealProp,
   onEditMeal,
+  onPlanMeal,
 }: MealDetailsModalProps) {
   const resolvedMeal = plan?.meal ?? mealProp ?? null;
   const isPlanContext = Boolean(plan);
 
   const [servings, setServings] = useState<number>(plan?.servings ?? resolvedMeal?.servings ?? 2);
-  const { done, toggle, reset } = usePlanStepProgress(plan?.id);
-  const updateStatus = useUpdatePlanStatus();
+  // Étapes cochées : persistées côté serveur (partagées avec la famille),
+  // le statut du plan est redérivé par l'API à chaque mise à jour.
+  const { done, toggle, reset } = usePlanStepProgress(plan);
 
   useEffect(() => {
     if (open) setServings(plan?.servings ?? resolvedMeal?.servings ?? 2);
@@ -42,34 +45,26 @@ export function MealDetailsModal({
   }
 
   const meal = resolvedMeal;
-  const totalSteps = meal.steps?.length ?? 0;
-
-  // ── Statut auto (contexte planification uniquement) ───────
-  const deriveStatus = (count: number): MealPlanStatus =>
-    totalSteps === 0 ? 'a_faire' : count === 0 ? 'a_faire' : count >= totalSteps ? 'prepare' : 'en_preparation';
-
-  const handleToggle = (stepNumber: number) => {
-    toggle(stepNumber);
-    if (!plan || totalSteps === 0) return;
-    const projected = new Set(done);
-    if (projected.has(stepNumber)) projected.delete(stepNumber);
-    else projected.add(stepNumber);
-    updateStatus.mutate({ id: plan.id, status: deriveStatus(projected.size) });
-  };
-
-  const handleReset = () => {
-    reset();
-    if (plan) updateStatus.mutate({ id: plan.id, status: 'a_faire' });
-  };
 
   const footer = isPlanContext && plan ? (
     <Button variant="secondary" className="w-full" onClick={() => onEditPlanning?.(plan.id)}>
       <Pencil className="h-4 w-4" /> Modifier la planification
     </Button>
   ) : (
-    <Button variant="secondary" className="w-full" onClick={() => onEditMeal?.(meal.id)}>
-      <Pencil className="h-4 w-4" /> Modifier le plat
-    </Button>
+    <div className="flex gap-2">
+      {onPlanMeal && (
+        <Button className="flex-1" onClick={() => onPlanMeal(meal.id)}>
+          <CalendarPlus className="h-4 w-4" /> Planifier
+        </Button>
+      )}
+      <Button
+        variant="secondary"
+        className={onPlanMeal ? 'flex-1' : 'w-full'}
+        onClick={() => onEditMeal?.(meal.id)}
+      >
+        <Pencil className="h-4 w-4" /> Modifier le plat
+      </Button>
+    </div>
   );
 
   return (
@@ -79,7 +74,7 @@ export function MealDetailsModal({
         servings={servings}
         onServingsChange={setServings}
         stepsInteraction={
-          isPlanContext ? { done, onToggle: handleToggle, onReset: handleReset } : undefined
+          isPlanContext ? { done, onToggle: toggle, onReset: reset } : undefined
         }
       />
     </Modal>

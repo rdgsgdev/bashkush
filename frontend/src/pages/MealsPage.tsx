@@ -4,6 +4,7 @@ import { Header } from '../components/layout/Header';
 import { MealCard } from '../components/meals/MealCard';
 import { MealEditionModal } from '../components/modals/MealEditionModal';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
+import { MealPlanningModal } from '../components/modals/MealPlanningModal';
 import { MealModeChoiceModal } from '../components/modals/MealModeChoiceModal';
 import { MealAIGenerationModal } from '../components/modals/MealAIGenerationModal';
 import { Button } from '../components/ui/Button';
@@ -61,6 +62,19 @@ export function MealsPage() {
     setParams(params, { replace: true });
   };
 
+  // Modale de planification : ?plan=<mealId> → création avec plat présélectionné.
+  const planParam = params.get('plan');
+  const planningOpen = Boolean(planParam);
+  const closePlanning = () => {
+    params.delete('plan');
+    setParams(params, { replace: true });
+  };
+  const planMeal = (mealId: string) => {
+    params.delete('details');
+    params.set('plan', mealId);
+    setParams(params, { replace: true });
+  };
+
   return (
     <div className="flex flex-1 flex-col">
       <Header
@@ -108,6 +122,14 @@ export function MealsPage() {
         meal={detailsMeal}
         onClose={closeDetails}
         onEditMeal={editMeal}
+        onPlanMeal={planMeal}
+      />
+
+      {/* ?plan=<mealId> → planification du plat (plat présélectionné). */}
+      <MealPlanningModal
+        open={planningOpen}
+        onClose={closePlanning}
+        defaultMealId={planParam ?? undefined}
       />
 
       {/* ?meal=new → choix du mode d'ajout (IA ou manuel). */}
