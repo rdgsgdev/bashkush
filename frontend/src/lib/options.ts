@@ -1,4 +1,4 @@
-import { AISLE_LABELS, DIFFICULTY_LABELS, CATEGORY_LABELS, MEAL_TYPE_LABELS } from '../types';
+import { AISLE_LABELS, DIFFICULTY_LABELS, CATEGORY_LABELS, MEAL_TYPE_LABELS, STORE_LABELS } from '../types';
 
 export const DIFFICULTY_OPTIONS = Object.entries(DIFFICULTY_LABELS).map(([value, label]) => ({
   value,
@@ -16,6 +16,11 @@ export const MEAL_TYPE_OPTIONS = Object.entries(MEAL_TYPE_LABELS).map(([value, l
 }));
 
 export const AISLE_OPTIONS_LIST = Object.entries(AISLE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+export const STORE_OPTIONS = Object.entries(STORE_LABELS).map(([value, label]) => ({
   value,
   label,
 }));

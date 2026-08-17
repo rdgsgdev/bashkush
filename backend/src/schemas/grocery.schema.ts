@@ -7,6 +7,7 @@ export const createGroceryItemSchema = z.object({
   quantity: z.number().optional().default(1),
   unit: z.string().min(1),
   aisle: z.string().min(1),
+  store: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 export type CreateGroceryItemInput = z.infer<typeof createGroceryItemSchema>;
@@ -16,6 +17,7 @@ export const updateGroceryItemSchema = z.object({
   quantity: z.number().optional(),
   unit: z.string().min(1).optional(),
   aisle: z.string().min(1).optional(),
+  store: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   checked: z.boolean().optional(),
 });

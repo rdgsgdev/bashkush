@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { MealCarousel } from '../components/meals/MealCarousel';
+import { StoreLogo } from '../components/grocery/StoreLogo';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useGrocery, useToggleCheck } from '../api/grocery';
@@ -205,6 +206,7 @@ export function HomePage() {
                     <span className="shrink-0 text-xs text-stone-400">
                       {it.quantity} {it.unit}
                     </span>
+                    <StoreLogo store={it.store} />
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${aisleColor(it.aisle)}`}
                     >

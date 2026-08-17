@@ -115,6 +115,7 @@ CREATE TABLE "grocery_items" (
     "quantity" DOUBLE PRECISION NOT NULL,
     "unit" TEXT NOT NULL,
     "aisle" TEXT NOT NULL,
+    "store" TEXT,
     "is_manual" BOOLEAN NOT NULL DEFAULT false,
     "checked" BOOLEAN NOT NULL DEFAULT false,
     "archived" BOOLEAN NOT NULL DEFAULT false,

@@ -103,6 +103,7 @@ export interface CreateGroceryItemInput {
   quantity?: number;
   unit: string;
   aisle: string;
+  store?: string | null;
   notes?: string | null;
 }
 
@@ -114,6 +115,7 @@ export async function createGroceryItem(input: CreateGroceryItemInput): Promise<
     quantity: input.quantity ?? 1,
     unit: input.unit,
     aisle: input.aisle,
+    store: input.store ?? null,
     isManual: true,
     checked: false,
     archived: false,
@@ -137,7 +139,7 @@ export async function createGroceryItem(input: CreateGroceryItemInput): Promise<
 
 export async function updateGroceryItem(
   id: string,
-  input: Partial<{ name: string; quantity: number; unit: string; aisle: string; notes: string | null; checked: boolean }>,
+  input: Partial<{ name: string; quantity: number; unit: string; aisle: string; store: string | null; notes: string | null; checked: boolean }>,
 ): Promise<GroceryItem> {
   const cached = findCachedItem(id);
   return runOfflineAware({
@@ -283,6 +285,7 @@ export function useCreateGroceryItem() {
         quantity: input.quantity ?? 1,
         unit: input.unit,
         aisle: input.aisle,
+        store: input.store ?? null,
         isManual: true,
         checked: false,
         archived: false,
