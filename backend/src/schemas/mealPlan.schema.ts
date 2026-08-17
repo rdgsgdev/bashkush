@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const mealPlanStatusEnum = z.enum(['a_faire', 'en_preparation', 'prepare']);
 
 /** Moment de consommation du repas planifié. */
-export const mealTypeEnum = z.enum(['petit_dej', 'dejeuner', 'diner', 'collation']);
+export const mealTypeEnum = z.enum(['petit_dejeuner', 'brunch', 'diner', 'souper', 'collation']);
 
 /**
  * Sélection d'ingrédients faite par l'utilisateur dans la modale de

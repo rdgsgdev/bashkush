@@ -280,15 +280,6 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
       </Field>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Statut">
-          <Select value={status} onChange={(e) => setStatus(e.target.value as MealPlanStatus)}>
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <Field label="Type de repas">
           <Select
             value={mealType}
@@ -296,6 +287,15 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate }: MealPlan
           >
             <option value="">—</option>
             {MEAL_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Statut">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as MealPlanStatus)}>
+            {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>

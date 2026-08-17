@@ -176,7 +176,7 @@ model MealPlan {
   servings Int      @default(2) // 1..10
   status   String   @default("a_faire") // a_faire | en_preparation | prepare
   // Moment de consommation du repas planifié.
-  mealType String?  @map("meal_type") // petit_dej | dejeuner | diner | collation
+  mealType String?  @map("meal_type") // petit_dejeuner | brunch | diner | souper | collation
   // Numéros des étapes de préparation cochées (partagées entre membres de
   // la famille) — le statut est dérivé de ce tableau côté serveur.
   completedSteps Int[] @default([]) @map("completed_steps")

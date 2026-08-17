@@ -17,7 +17,7 @@ export type Category =
   | 'main'
   | 'beverage';
 /** Moment de consommation d'un repas planifié. */
-export type MealType = 'petit_dej' | 'dejeuner' | 'diner' | 'collation';
+export type MealType = 'petit_dejeuner' | 'brunch' | 'diner' | 'souper' | 'collation';
 export type MealPlanStatus = 'a_faire' | 'en_preparation' | 'prepare';
 
 export interface Nutrition {
@@ -98,7 +98,7 @@ export interface MealPlan {
   toDate: string;
   servings: number;
   status: MealPlanStatus;
-  /** Moment de consommation (petit_dej | dejeuner | diner | collation). */
+  /** Moment de consommation (petit_dejeuner | brunch | diner | souper | collation). */
   mealType?: MealType | null;
   /** Numéros des étapes de préparation cochées — partagés entre membres. */
   completedSteps: number[];
@@ -161,9 +161,10 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
-  petit_dej: 'Petit-déjeuner',
-  dejeuner: 'Déjeuner',
+  petit_dejeuner: 'Petit-déjeuner',
+  brunch: 'Brunch',
   diner: 'Dîner',
+  souper: 'Souper',
   collation: 'Collation',
 };
 
