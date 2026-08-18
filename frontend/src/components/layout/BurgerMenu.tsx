@@ -1,9 +1,12 @@
-import { Home, UtensilsCrossed, CalendarDays, ShoppingCart, User, LogOut } from 'lucide-react';
+import { Home, UtensilsCrossed, CalendarDays, ShoppingCart, Settings, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUiStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
+import { useMeals } from '../../api/meals';
+import { useGrocery } from '../../api/grocery';
+import { useProfile } from '../../api/profile';
 import { cn } from '../../lib/utils';
 
 const NAV = [
@@ -17,8 +20,20 @@ export function BurgerMenu() {
   const open = useUiStore((s) => s.burgerOpen);
   const close = useUiStore((s) => s.closeBurger);
   const signOut = useAuthStore((s) => s.signOut);
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Badges du menu : abonnements au cache React Query (offline-safe).
+  const { data: meals } = useMeals();
+  const { data: grocery } = useGrocery(false);
+  const { data: profile } = useProfile();
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  const badges: Record<string, number> = {
+    '/meals': meals?.length ?? 0,
+    '/grocery': (grocery?.items ?? []).filter((it) => !it.checked).length,
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +70,11 @@ export function BurgerMenu() {
                 >
                   <Icon className="h-5 w-5" />
                   {label}
+                  {badges[to] > 0 && (
+                    <span className="ml-auto rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                      {badges[to]}
+                    </span>
+                  )}
                 </button>
               </li>
             );
@@ -62,16 +82,14 @@ export function BurgerMenu() {
         </ul>
         <div className="border-t border-stone-100 px-3 py-3">
           <button
-            onClick={() => go('/profil')}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
-              location.pathname === '/profil'
-                ? 'bg-brand-50 text-brand-700'
-                : 'text-stone-600 hover:bg-stone-100',
-            )}
+            onClick={() => {
+              // TODO: naviguer vers /parametres quand la page existera.
+              close();
+            }}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-100"
           >
-            <User className="h-5 w-5" />
-            Mon profil
+            <Settings className="h-5 w-5" />
+            Paramètres
           </button>
           <button
             onClick={async () => {
@@ -83,6 +101,36 @@ export function BurgerMenu() {
           >
             <LogOut className="h-5 w-5" />
             Déconnexion
+          </button>
+          <button
+            onClick={() => go('/profil')}
+            className={cn(
+              'mt-3 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold text-white transition',
+              location.pathname === '/profil' ? 'bg-brand-600' : 'bg-brand-500 hover:bg-brand-600',
+            )}
+          >
+            {profile?.photoUrl && !photoFailed ? (
+              <img
+                src={profile.photoUrl}
+                alt="Photo de profil"
+                onError={() => setPhotoFailed(true)}
+                className="h-10 w-10 shrink-0 rounded-full border-2 border-white/70 object-cover"
+              />
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold text-white">
+                {(profile?.fullName || user?.email || '?').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex min-w-0 flex-1 flex-col items-start">
+              <span className="max-w-full truncate text-sm font-semibold text-white">
+                {profile?.fullName || 'Mon profil'}
+              </span>
+              {user?.email && (
+                <span className="max-w-full truncate text-xs font-normal text-white/80">
+                  {user.email}
+                </span>
+              )}
+            </div>
           </button>
           <p className="px-2 pt-2 text-xs text-stone-400">Bashkush · v1.0</p>
         </div>
