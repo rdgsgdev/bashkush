@@ -12,8 +12,11 @@ import {
   useUploadMealImage,
 } from '../../api/meals';
 import { fetchIngredientNutrition } from '../../api/ai';
+import { useSettings } from '../../api/settings';
+import { useAisles } from '../../api/grocery';
 import { useConnection } from '../../hooks/useConnection';
-import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS, AISLE_OPTIONS_LIST, UNIT_OPTIONS } from '../../lib/options';
+import { useOptionList } from '../../hooks/useOptionList';
+import { DIFFICULTY_OPTIONS, AISLE_OPTIONS_LIST } from '../../lib/options';
 import {
   computeMealNutrition,
   hasNutritionValues,
@@ -129,6 +132,20 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
   const { status } = useConnection();
   const offline = status !== 'online';
 
+  // Listes paramétrables de la famille (Paramètres) — repli sur les défauts
+  // statiques tant que la requête n'a jamais abouti.
+  const { options: categoryOptions } = useOptionList('category');
+  const { options: unitOptions } = useOptionList('unit');
+  const { data: serverAisles } = useAisles();
+  const aisleOptions = serverAisles?.length
+    ? serverAisles.map((a) => ({ value: a.name, label: a.label ?? a.name }))
+    : AISLE_OPTIONS_LIST;
+
+  // Complétion IA des apports : peut être désactivée pour la famille
+  // (Paramètres) — undefined = réglage pas encore chargé → actif par défaut.
+  const { data: settings } = useSettings();
+  const aiNutritionEnabled = settings?.aiNutritionEnabled !== false;
+
   // (Ré)initialise l'état quand la modale s'ouvre ou change de repas.
   useEffect(() => {
     if (open) {
@@ -203,11 +220,13 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
         .map((s, k) => ({ ...s, stepNumber: k + 1 })),
     }));
 
-  // ── Complétion IA (Sonar) ─────────────────────────────────
+  // ── Complétion IA (Sonar) des apports par ingrédient ─────
   // Ajout manuel ou modification du nom, de la quantité ou de l'unité →
   // Sonar est interrogé (après délai de frappe) et remplit les apports,
-  // qui restent éditables. Le rayon ne déclenche rien.
+  // qui restent éditables. Le rayon ne déclenche rien. Désactivable pour
+  // toute la famille dans les Paramètres (les champs restent manuels).
   useEffect(() => {
+    if (!aiNutritionEnabled) return;
     for (const ing of draft.ingredients) {
       const { quantity } = ing;
       // Triplet incomplet : annule tout appel en attente pour cet ingrédient.
@@ -247,7 +266,7 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
         }, AI_DEBOUNCE_MS),
       );
     }
-  }, [draft.ingredients]);
+  }, [draft.ingredients, aiNutritionEnabled]);
 
   // ── Apports par portion ──────────────────────────────────
   // Calculés en direct depuis les apports portés par chaque ingrédient
@@ -523,11 +542,15 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
         <Field label="Catégorie">
           <Select value={draft.category ?? ''} onChange={(e) => set('category', (e.target.value || undefined) as any)}>
             <option value="">—</option>
-            {CATEGORY_OPTIONS.map((o) => (
+            {categoryOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
+            {/* Catégorie existante retirée de la liste : reste sélectionnable. */}
+            {draft.category && !categoryOptions.some((o) => o.value === draft.category) && (
+              <option value={draft.category}>{draft.category}</option>
+            )}
           </Select>
         </Field>
 
@@ -567,20 +590,22 @@ export function MealEditionModal({ meal, open, onClose }: MealEditionModalProps)
                     }
                   />
                   <Select value={ing.unit} onChange={(e) => updateIngredient(idx, { unit: e.target.value })}>
-                    {UNIT_OPTIONS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
+                    {unitOptions.map((u) => (
+                      <option key={u.value} value={u.value}>
+                        {u.label}
                       </option>
                     ))}
-                    {!UNIT_OPTIONS.includes(ing.unit) && <option value={ing.unit}>{ing.unit}</option>}
+                    {!unitOptions.some((o) => o.value === ing.unit) && (
+                      <option value={ing.unit}>{ing.unit}</option>
+                    )}
                   </Select>
                   <Select value={ing.aisle} onChange={(e) => updateIngredient(idx, { aisle: e.target.value })}>
-                    {AISLE_OPTIONS_LIST.map((o) => (
+                    {aisleOptions.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
                       </option>
                     ))}
-                    {!AISLE_OPTIONS_LIST.some((o) => o.value === ing.aisle) && (
+                    {!aisleOptions.some((o) => o.value === ing.aisle) && (
                       <option value={ing.aisle}>{ing.aisle}</option>
                     )}
                   </Select>

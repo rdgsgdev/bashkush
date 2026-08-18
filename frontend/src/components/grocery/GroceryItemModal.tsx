@@ -3,7 +3,8 @@ import { AlertCircle } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Field, Input, Select, Textarea } from '../ui/FormControl';
-import { AISLE_OPTIONS_LIST, STORE_OPTIONS, UNIT_OPTIONS } from '../../lib/options';
+import { AISLE_OPTIONS_LIST } from '../../lib/options';
+import { useOptionList } from '../../hooks/useOptionList';
 import { StoreLogo } from './StoreLogo';
 import { useCreateGroceryItem, useUpdateGroceryItem } from '../../api/grocery';
 import type { GroceryAisle, GroceryItem } from '../../types';
@@ -24,31 +25,34 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
   const [aisle, setAisle] = useState('epicerie_seche');
   const [store, setStore] = useState('');
   const [notes, setNotes] = useState('');
-  const [customAisle, setCustomAisle] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const create = useCreateGroceryItem();
   const update = useUpdateGroceryItem();
 
+  // Listes paramétrables de la famille (Paramètres).
+  const { options: unitOptions } = useOptionList('unit');
+  const { options: storeOptions } = useOptionList('store');
+
+  // Rayons : ceux de la famille (éditables dans les Paramètres), avec repli
+  // sur les défauts statiques si le serveur n'a jamais répondu.
+  const aisleOptions = aisles.length
+    ? aisles.map((a) => ({ value: a.name, label: a.label ?? a.name }))
+    : AISLE_OPTIONS_LIST;
+  const defaultAisle = aisleOptions[0]?.value ?? 'epicerie_seche';
+
   useEffect(() => {
     if (open) {
       setName(item?.name ?? '');
       setQuantity(String(item?.quantity ?? 1));
-      setUnit(item?.unit ?? 'g');
-      setAisle(item?.aisle ?? 'epicerie_seche');
+      setUnit(item?.unit ?? unitOptions[0]?.value ?? 'g');
+      setAisle(item?.aisle ?? defaultAisle);
       setStore(item?.store ?? '');
       setNotes(item?.notes ?? '');
-      setCustomAisle('');
       setError(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item]);
-
-  const allAisles = [
-    ...AISLE_OPTIONS_LIST,
-    ...aisles
-      .filter((a) => !AISLE_OPTIONS_LIST.some((o) => o.value === a.name))
-      .map((a) => ({ value: a.name, label: a.label ?? a.name })),
-  ];
 
   const handleSave = async () => {
     setError(null);
@@ -65,12 +69,11 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
       setError('La quantité doit être un nombre.');
       return;
     }
-    const finalAisle = customAisle.trim() || aisle;
     try {
       if (isEdit && item) {
         await update.mutateAsync({
           id: item.id,
-          input: { name, quantity: qty, unit, aisle: finalAisle, store: store || null, notes },
+          input: { name, quantity: qty, unit, aisle, store: store || null, notes },
         });
       } else {
         // UUID généré côté client : rend la création rejouable hors ligne
@@ -80,7 +83,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
           name,
           quantity: qty,
           unit,
-          aisle: finalAisle,
+          aisle,
           store: store || null,
           notes,
         });
@@ -132,32 +135,26 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
           </Field>
           <Field label="Unité">
             <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
-              {UNIT_OPTIONS.map((u) => (
-                <option key={u} value={u}>
-                  {u}
+              {unitOptions.map((u) => (
+                <option key={u.value} value={u.value}>
+                  {u.label}
                 </option>
               ))}
-              {!UNIT_OPTIONS.includes(unit) && <option value={unit}>{unit}</option>}
+              {!unitOptions.some((o) => o.value === unit) && <option value={unit}>{unit}</option>}
             </Select>
           </Field>
         </div>
 
         <Field label="Rayon">
           <Select value={aisle} onChange={(e) => setAisle(e.target.value)}>
-            {allAisles.map((o) => (
+            {aisleOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
+            {/* Rayon de l'item retiré de la liste : reste sélectionnable. */}
+            {!aisleOptions.some((o) => o.value === aisle) && <option value={aisle}>{aisle}</option>}
           </Select>
-        </Field>
-
-        <Field label="…ou nouveau rayon">
-          <Input
-            value={customAisle}
-            onChange={(e) => setCustomAisle(e.target.value)}
-            placeholder="Laisser vide pour utiliser le rayon ci-dessus"
-          />
         </Field>
 
         {/* Magasin : chips avec logos ('' = aucun). */}
@@ -175,7 +172,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
             >
               Aucun
             </button>
-            {STORE_OPTIONS.map((o) => (
+            {storeOptions.map((o) => (
               <button
                 type="button"
                 key={o.value}
@@ -189,7 +186,7 @@ export function GroceryItemModal({ item, aisles, open, onClose }: GroceryItemMod
                     : 'border-stone-200 bg-white hover:border-stone-300',
                 )}
               >
-                <StoreLogo store={o.value} className="h-5 w-auto" />
+                <StoreLogo store={o.value} logoUrl={o.logoUrl} label={o.label} className="h-5 w-auto" />
               </button>
             ))}
           </div>

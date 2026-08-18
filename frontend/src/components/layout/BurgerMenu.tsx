@@ -83,10 +83,12 @@ export function BurgerMenu() {
         <div className="border-t border-stone-100 px-3 py-3">
           <button
             onClick={() => {
-              // TODO: naviguer vers /parametres quand la page existera.
-              close();
+              go('/parametres');
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-100"
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-stone-100',
+              location.pathname === '/parametres' ? 'bg-brand-50 text-brand-700' : 'text-stone-600',
+            )}
           >
             <Settings className="h-5 w-5" />
             Paramètres

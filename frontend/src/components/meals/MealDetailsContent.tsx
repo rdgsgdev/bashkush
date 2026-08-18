@@ -4,8 +4,9 @@
 
 import { Clock, ChefHat, Flame, Check, RotateCcw, Users } from 'lucide-react';
 import { NumberStepper } from '../ui/NumberStepper';
-import { DIFFICULTY_LABELS, CATEGORY_LABELS, AISLE_LABELS } from '../../types';
-import type { Category, Difficulty, Ingredient, Nutrition, Step } from '../../types';
+import { DIFFICULTY_LABELS, AISLE_LABELS } from '../../types';
+import type { Difficulty, Ingredient, Nutrition, Step } from '../../types';
+import { useOptionLabel } from '../../hooks/useOptionList';
 import { cn, formatQty, aisleColor } from '../../lib/utils';
 
 /** Données nécessaires à l'affichage (satisfaites par Meal comme par MealDraft). */
@@ -16,7 +17,7 @@ export interface MealContentData {
   prepTime?: number | null;
   cookTime?: number | null;
   difficulty?: Difficulty | null;
-  category?: Category | null;
+  category?: string | null;
   nutrition?: Nutrition | null;
   notes?: string | null;
   imageUrl?: string | null;
@@ -46,6 +47,9 @@ export function MealDetailsContent({
   maxServings = 10,
   stepsInteraction,
 }: MealDetailsContentProps) {
+  // Catégories paramétrables de la famille — repli sur le libellé historique
+  // puis sur la valeur brute (catégorie retirée de la liste / personnalisée).
+  const categoryLabel = useOptionLabel('category');
   const baseServings = meal.servings || 1;
   const ratio = servings / baseServings;
   const scaledQty = (q: number) => Math.round(q * ratio * 1000) / 1000;
@@ -81,9 +85,7 @@ export function MealDetailsContent({
         )}
         {meal.category && (
           <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">
-            {/* Fallback brut : les caches persistés peuvent encore porter
-                d'anciennes valeurs (midi/soir…) le temps d'un refetch. */}
-            {CATEGORY_LABELS[meal.category] ?? meal.category}
+            {categoryLabel(meal.category)}
           </span>
         )}
       </div>

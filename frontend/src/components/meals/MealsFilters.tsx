@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
 import { ArrowUpDown, ChevronDown, Heart, RotateCcw, Search, X } from 'lucide-react';
-import { Category, Difficulty } from '../../types';
-import { CATEGORY_OPTIONS, DIFFICULTY_OPTIONS } from '../../lib/options';
+import { Difficulty } from '../../types';
+import { DIFFICULTY_OPTIONS } from '../../lib/options';
+import { useOptionList } from '../../hooks/useOptionList';
 import { cn } from '../../lib/utils';
 
 /** Critères de tri de la liste des plats. */
@@ -16,8 +17,8 @@ const SORT_OPTIONS: { value: MealSort; label: string }[] = [
 interface MealsFiltersProps {
   search: string;
   onSearchChange: (value: string) => void;
-  category: Category | 'all';
-  onCategoryChange: (value: Category | 'all') => void;
+  category: string | 'all';
+  onCategoryChange: (value: string | 'all') => void;
   difficulty: Difficulty | 'all';
   onDifficultyChange: (value: Difficulty | 'all') => void;
   favoritesOnly: boolean;
@@ -70,6 +71,8 @@ export function MealsFilters({
   hasActiveFilters,
   onReset,
 }: MealsFiltersProps) {
+  // Catégories paramétrables de la famille (Paramètres).
+  const { options: categoryOptions } = useOptionList('category');
   return (
     <div className="space-y-2.5 border-b border-stone-200 bg-white px-4 py-3">
       {/* Recherche + tri */}
@@ -135,11 +138,11 @@ export function MealsFilters({
         <Chip active={category === 'all'} onClick={() => onCategoryChange('all')}>
           Toutes
         </Chip>
-        {CATEGORY_OPTIONS.map((o) => (
+        {categoryOptions.map((o) => (
           <Chip
             key={o.value}
             active={category === o.value}
-            onClick={() => onCategoryChange(category === o.value ? 'all' : (o.value as Category))}
+            onClick={() => onCategoryChange(category === o.value ? 'all' : o.value)}
           >
             {o.label}
           </Chip>

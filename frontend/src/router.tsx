@@ -7,6 +7,7 @@ import { GroceryListPage } from './pages/GroceryListPage';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SettingsPage } from './pages/SettingsPage';
 import { AppShell } from './components/layout/AppShell';
 import { useAuthStore } from './store/authStore';
 import { useProfile } from './api/profile';
@@ -86,6 +87,7 @@ export function AppRouter() {
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/grocery" element={<GroceryListPage />} />
         <Route path="/profil" element={<ProfilePage />} />
+        <Route path="/parametres" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,7 +1,12 @@
 // ── Types partagés (miroir des modèles Prisma du backend) ────
 
 export type Difficulty = 'facile' | 'moyen' | 'difficile';
-/** Type de plat (nature de la recette — le moment du repas est sur la planification). */
+/**
+ * Type de plat (nature de la recette — le moment du repas est sur la
+ * planification). Liste paramétrable par famille (page Paramètres) : les
+ * valeurs ci-dessous sont les défauts, mais `Meal.category` accepte toute
+ * clé (catégories personnalisées ou retirées de la liste).
+ */
 export type Category =
   | 'bowl'
   | 'wrap'
@@ -16,9 +21,30 @@ export type Category =
   | 'side'
   | 'main'
   | 'beverage';
-/** Moment de consommation d'un repas planifié. */
+/** Moment de consommation d'un repas planifié (liste paramétrable, défauts ci-dessous). */
 export type MealType = 'petit_dejeuner' | 'brunch' | 'diner' | 'souper' | 'collation';
 export type MealPlanStatus = 'a_faire' | 'en_preparation' | 'prepare';
+
+/** Listes paramétrables de la famille (page Paramètres). */
+export type ListKey = 'category' | 'unit' | 'store' | 'meal_type';
+
+export interface ListOption {
+  id: string;
+  listKey: ListKey;
+  value: string; // clé technique référencée par les données
+  label: string; // libellé affiché
+  sortOrder: number;
+  logoUrl?: string | null; // logo du magasin (Supabase Storage) — stores uniquement
+  logoPath?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Réglages IA de la famille (page Paramètres). */
+export interface FamilySettings {
+  aiMealGenerationEnabled: boolean;
+  aiNutritionEnabled: boolean;
+}
 
 export interface Nutrition {
   calories?: number;
@@ -61,7 +87,7 @@ export interface Meal {
   cookTime?: number | null;
   totalTime?: number | null;
   difficulty?: Difficulty | null;
-  category?: Category | null;
+  category?: string | null; // clé de la liste paramétrable (voir CATEGORY_LABELS pour les défauts)
   nutrition?: Nutrition | null;
   notes?: string | null;
   isFavorite: boolean;
@@ -83,7 +109,7 @@ export interface MealDraft {
   cookTime?: number | null;
   totalTime?: number | null;
   difficulty?: Difficulty | null;
-  category?: Category | null;
+  category?: string | null;
   nutrition?: Nutrition | null;
   notes?: string | null;
   ingredients: Ingredient[];
@@ -98,8 +124,8 @@ export interface MealPlan {
   toDate: string;
   servings: number;
   status: MealPlanStatus;
-  /** Moment de consommation (petit_dejeuner | brunch | diner | souper | collation). */
-  mealType?: MealType | null;
+  /** Moment de consommation (liste paramétrable — voir MEAL_TYPE_LABELS pour les défauts). */
+  mealType?: string | null;
   /** Numéros des étapes de préparation cochées — partagés entre membres. */
   completedSteps: number[];
   createdAt: string;
@@ -139,6 +165,9 @@ export interface GroceryListResponse {
 }
 
 // ── Libellés FR pour les enums ──────────────────────────────
+// Les listes sont paramétrables (page Paramètres) : ces maps ne couvrent
+// que les valeurs par défaut — les consommateurs replient sur la valeur
+// brute quand la clé est inconnue (catégorie retirée / personnalisée).
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   facile: 'Facile',
@@ -146,7 +175,7 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   difficile: 'Difficile',
 };
 
-export const CATEGORY_LABELS: Record<Category, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   bowl: 'Bowl',
   wrap: 'Wrap',
   salad: 'Salade',
@@ -162,7 +191,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   beverage: 'Boisson',
 };
 
-export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+export const MEAL_TYPE_LABELS: Record<string, string> = {
   petit_dejeuner: 'Petit-déjeuner',
   brunch: 'Brunch',
   diner: 'Dîner',

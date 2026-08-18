@@ -498,3 +498,72 @@ export function useReorderAisles() {
     },
   });
 }
+
+// ── Rayons : CRUD (page Paramètres) ──────────────────────────
+
+export function useAisles() {
+  return useQuery({
+    queryKey: queryKeys.aisles,
+    queryFn: fetchAisles,
+    persister: queryPersisterOption,
+  });
+}
+
+export interface CreateAisleInput {
+  name: string;
+  label?: string;
+  sortOrder?: number;
+}
+
+export async function createAisle(input: CreateAisleInput): Promise<GroceryAisle> {
+  const { data } = await api.post<GroceryAisle>('/grocery-aisles', input);
+  return data;
+}
+
+export interface UpdateAisleInput {
+  label?: string;
+  sortOrder?: number;
+}
+
+export async function updateAisle(name: string, input: UpdateAisleInput): Promise<GroceryAisle> {
+  const { data } = await api.put<GroceryAisle>(`/grocery-aisles/${encodeURIComponent(name)}`, input);
+  return data;
+}
+
+export async function deleteAisle(name: string): Promise<void> {
+  await api.delete(`/grocery-aisles/${encodeURIComponent(name)}`);
+}
+
+export function useCreateAisle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createAisle,
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+      void qc.invalidateQueries({ queryKey: ['aisles'] });
+    },
+  });
+}
+
+export function useUpdateAisle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, input }: { name: string; input: UpdateAisleInput }) =>
+      updateAisle(name, input),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+      void qc.invalidateQueries({ queryKey: ['aisles'] });
+    },
+  });
+}
+
+export function useDeleteAisle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => deleteAisle(name),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['grocery'] });
+      void qc.invalidateQueries({ queryKey: ['aisles'] });
+    },
+  });
+}

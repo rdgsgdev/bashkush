@@ -121,14 +121,81 @@ function InvitationRow({
   );
 }
 
-/** Section « Ma famille » de la page profil : liste + ajout par courriel. */
-export function FamilySection() {
+/**
+ * Membres + invitations reçues de la famille — toujours visibles, même quand
+ * la carte « Ma famille » du profil est repliée (seul l'ajout est masqué).
+ */
+export function FamilyMembers() {
   const { data: members, isLoading } = useFamily();
   const { data: invitations } = useFamilyInvitations();
-  const addMember = useAddFamilyMember();
   const removeMember = useRemoveFamilyMember();
   const acceptInvitation = useAcceptFamilyInvitation();
   const declineInvitation = useDeclineFamilyInvitation();
+
+  const [familyError, setFamilyError] = useState<string | null>(null);
+  const onError = (fallback: string) => (err: unknown) =>
+    setFamilyError(
+      (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback,
+    );
+
+  return (
+    <>
+      {invitations && invitations.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+            Invitations reçues
+          </p>
+          <ul className="space-y-2">
+            {invitations.map((inv) => (
+              <InvitationRow
+                key={inv.id}
+                invitation={inv}
+                onAccept={(id) => {
+                  setFamilyError(null);
+                  acceptInvitation.mutate(id, { onError: onError('Impossible d’accepter cette invitation.') });
+                }}
+                onDecline={(id) => {
+                  setFamilyError(null);
+                  declineInvitation.mutate(id, { onError: onError('Impossible de refuser cette invitation.') });
+                }}
+                accepting={acceptInvitation.isPending}
+                declining={declineInvitation.isPending}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-stone-400">Chargement…</p>
+      ) : members && members.length > 0 ? (
+        <ul className="space-y-2">
+          {members.map((m) => (
+            <MemberRow
+              key={m.id}
+              member={m}
+              onRemove={(id) => {
+                setFamilyError(null);
+                removeMember.mutate(id, { onError: onError('Impossible de retirer ce membre.') });
+              }}
+              removing={removeMember.isPending}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p className="flex items-center gap-2 text-sm text-stone-400">
+          <Users className="h-4 w-4" />
+          Ajoute un proche par courriel pour partager ton espace famille.
+        </p>
+      )}
+      {familyError && <p className="text-sm text-red-600">{familyError}</p>}
+    </>
+  );
+}
+
+/** Ajout d'un membre par courriel — masqué quand la carte est repliée. */
+export function FamilyInvite() {
+  const addMember = useAddFamilyMember();
 
   // Les invitations familiales nécessitent le serveur : connexion requise.
   const { status } = useConnection();
@@ -154,81 +221,8 @@ export function FamilySection() {
     });
   };
 
-  const handleRemove = (id: string) => {
-    setFamilyError(null);
-    removeMember.mutate(id, {
-      onError: (err) =>
-        setFamilyError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-            'Impossible de retirer ce membre.',
-        ),
-    });
-  };
-
-  const handleAcceptInvitation = (id: string) => {
-    setFamilyError(null);
-    acceptInvitation.mutate(id, {
-      onError: (err) =>
-        setFamilyError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-            'Impossible d’accepter cette invitation.',
-        ),
-    });
-  };
-
-  const handleDeclineInvitation = (id: string) => {
-    setFamilyError(null);
-    declineInvitation.mutate(id, {
-      onError: (err) =>
-        setFamilyError(
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-            'Impossible de refuser cette invitation.',
-        ),
-    });
-  };
-
   return (
     <>
-      {invitations && invitations.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-            Invitations reçues
-          </p>
-          <ul className="space-y-2">
-            {invitations.map((inv) => (
-              <InvitationRow
-                key={inv.id}
-                invitation={inv}
-                onAccept={handleAcceptInvitation}
-                onDecline={handleDeclineInvitation}
-                accepting={acceptInvitation.isPending}
-                declining={declineInvitation.isPending}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {isLoading ? (
-        <p className="text-sm text-stone-400">Chargement…</p>
-      ) : members && members.length > 0 ? (
-        <ul className="space-y-2">
-          {members.map((m) => (
-            <MemberRow
-              key={m.id}
-              member={m}
-              onRemove={handleRemove}
-              removing={removeMember.isPending}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="flex items-center gap-2 text-sm text-stone-400">
-          <Users className="h-4 w-4" />
-          Ajoute un proche par courriel pour partager ton espace famille.
-        </p>
-      )}
-
       <Field label="Ajouter un membre (courriel)">
         <div className="flex gap-2">
           <Input

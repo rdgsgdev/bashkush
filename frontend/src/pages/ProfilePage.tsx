@@ -1,12 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Camera, Flame, Beef, RefreshCw, Save } from 'lucide-react';
+import {
+  Activity,
+  Apple,
+  Camera,
+  ChevronDown,
+  Flame,
+  Beef,
+  HeartPulse,
+  RefreshCw,
+  Ruler,
+  Save,
+  StickyNote,
+  Target,
+  User,
+  Users,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Header } from '../components/layout/Header';
 import { Button } from '../components/ui/Button';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
 import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onboarding/Choice';
-import { FamilySection } from '../components/profile/FamilySection';
+import { FamilyMembers, FamilyInvite } from '../components/profile/FamilySection';
 import { useProfile, useSaveProfile, useUploadProfileImage } from '../api/profile';
 import { useAuthStore } from '../store/authStore';
 import { useConnection } from '../hooks/useConnection';
@@ -28,11 +43,43 @@ import {
 const toOptions = (labels: Record<string, string>): ChoiceOption[] =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * Carte repliable (même système que la page Paramètres, icône devant le
+ * titre incluse) : en-tête cliquable avec chevron, contenu masqué par
+ * défaut. `alwaysVisible` reste affiché même replié (ex: membres de la
+ * famille) ; `hideAlwaysVisibleWhenOpen` le masque une fois dépliée
+ * (ex: résumé d'identité remplacé par le formulaire complet).
+ */
+function Section({
+  icon: Icon,
+  title,
+  alwaysVisible,
+  hideAlwaysVisibleWhenOpen = false,
+  children,
+}: {
+  icon: typeof User;
+  title: string;
+  alwaysVisible?: ReactNode;
+  hideAlwaysVisibleWhenOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
   return (
     <section className="card space-y-4">
-      <h2 className="text-sm font-bold uppercase tracking-wide text-brand-700">{title}</h2>
-      {children}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 text-left"
+      >
+        <Icon className="h-4 w-4 shrink-0 text-brand-600" />
+        <h2 className="flex-1 text-sm font-bold uppercase tracking-wide text-brand-700">{title}</h2>
+        <ChevronDown
+          className={cn('h-4 w-4 shrink-0 text-stone-400 transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {alwaysVisible && !(open && hideAlwaysVisibleWhenOpen) && alwaysVisible}
+      {open && children}
     </section>
   );
 }
@@ -170,8 +217,9 @@ export function ProfilePage() {
       <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
 
       <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6">
-        {/* Objectifs quotidiens — éditables, icône ↻ pour recalculer */}
-        <section className="card mb-4 bg-brand-500 text-white">
+        {/* Objectifs quotidiens — éditables, icône ↻ pour recalculer
+            (toujours visibles, pas de carte repliable) */}
+        <section className="card bg-brand-500 text-white">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wide text-white/80">
               Objectifs quotidiens
@@ -244,240 +292,273 @@ export function ProfilePage() {
           </p>
         </section>
 
-      {/* Photo + identité */}
-      <Section title="Identité">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            {profile?.photoUrl && !photoFailed ? (
-              <img
-                src={profile.photoUrl}
-                alt="Photo de profil"
-                onError={() => setPhotoFailed(true)}
-                className="h-20 w-20 rounded-full border-2 border-brand-200 object-cover"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-100 text-2xl font-bold text-brand-600">
-                {(draft.fullName || user?.email || '?').charAt(0).toUpperCase()}
+        {/* Identité — photo, nom et courriel visibles même repliée ;
+            le résumé laisse place au formulaire complet une fois dépliée */}
+        <div className="mt-4">
+          <Section
+            icon={User}
+            title="Identité"
+            hideAlwaysVisibleWhenOpen
+            alwaysVisible={
+              <div className="flex items-center gap-3">
+                {profile?.photoUrl && !photoFailed ? (
+                  <img
+                    src={profile.photoUrl}
+                    alt="Photo de profil"
+                    onError={() => setPhotoFailed(true)}
+                    className="h-12 w-12 shrink-0 rounded-full border-2 border-brand-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-lg font-bold text-brand-600">
+                    {(draft.fullName || user?.email || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-stone-800">
+                    {draft.fullName || '—'}
+                  </p>
+                  <p className="truncate text-xs text-stone-400">{user?.email}</p>
+                </div>
               </div>
+            }
+          >
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                {profile?.photoUrl && !photoFailed ? (
+                  <img
+                    src={profile.photoUrl}
+                    alt="Photo de profil"
+                    onError={() => setPhotoFailed(true)}
+                    className="h-20 w-20 rounded-full border-2 border-brand-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-100 text-2xl font-bold text-brand-600">
+                    {(draft.fullName || user?.email || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={saving || offline}
+                  className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-white shadow-soft transition active:scale-95 disabled:opacity-50"
+                  aria-label="Changer la photo"
+                  title={offline ? 'Connexion requise pour changer la photo' : 'Changer la photo'}
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handlePhoto(file);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1">
+                <Field label="Nom complet">
+                  <Input
+                    value={draft.fullName ?? ''}
+                    onChange={(e) => set({ fullName: e.target.value })}
+                    placeholder="Ton nom"
+                  />
+                </Field>
+                <p className="truncate text-xs text-stone-400">{user?.email}</p>
+              </div>
+            </div>
+            {/* Empilés sur mobile : l'input date iOS déborde de sa cellule de grille
+                et chevauche le champ voisin. min-w-0 autorise aussi le rétrécissement
+                des cellules sur les écrans plus larges. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Date de naissance" className="min-w-0">
+                <Input
+                  type="date"
+                  value={draft.birthDate ?? ''}
+                  onChange={(e) => set({ birthDate: e.target.value })}
+                />
+              </Field>
+              <Field label="Âge" className="min-w-0">
+                <Input value={age !== null ? `${age} ans` : ''} readOnly placeholder="—" />
+              </Field>
+            </div>
+            <SingleChoice
+              legend="Sexe"
+              value={draft.sex}
+              options={toOptions(SEX_LABELS)}
+              onChange={(v) => set({ sex: v as ProfileDraft['sex'] })}
+            />
+          </Section>
+        </div>
+
+        {/* Ma famille — membres visibles même repliée, ajout masqué */}
+        <div className="mt-4">
+          <Section icon={Users} title="Ma famille" alwaysVisible={<FamilyMembers />}>
+            <FamilyInvite />
+          </Section>
+        </div>
+
+        {/* Mesures */}
+        <div className="mt-4">
+          <Section icon={Ruler} title="Mesures">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Taille (cm)">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={draft.heightCm ?? ''}
+                  onChange={(e) => set({ heightCm: e.target.value === '' ? null : Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Poids (kg)">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={draft.weightKg ?? ''}
+                  onChange={(e) => set({ weightKg: e.target.value === '' ? null : Number(e.target.value) })}
+                />
+              </Field>
+            </div>
+          </Section>
+        </div>
+
+        {/* Activité */}
+        <div className="mt-4">
+          <Section icon={Activity} title="Activité & forme">
+            <SingleChoice
+              legend="Niveau d’activité"
+              value={draft.activityLevel}
+              options={toOptions(ACTIVITY_LEVEL_LABELS)}
+              onChange={(v) => set({ activityLevel: v as ProfileDraft['activityLevel'] })}
+            />
+            <SingleChoice
+              legend="Activité hebdomadaire"
+              value={draft.weeklyActivity}
+              options={toOptions(WEEKLY_ACTIVITY_LABELS)}
+              onChange={(v) => set({ weeklyActivity: v as ProfileDraft['weeklyActivity'] })}
+            />
+            <SingleChoice
+              legend="Niveau de condition physique"
+              value={draft.fitnessLevel}
+              options={toOptions(FITNESS_LEVEL_LABELS)}
+              onChange={(v) => set({ fitnessLevel: v as ProfileDraft['fitnessLevel'] })}
+            />
+          </Section>
+        </div>
+
+        {/* Objectifs */}
+        <div className="mt-4">
+          <Section icon={Target} title="Objectifs">
+            <MultiChoice
+              legend="Objectifs physiques"
+              values={draft.goals ?? []}
+              options={toOptions(GOAL_LABELS)}
+              onChange={(goals) => set({ goals: goals as ProfileDraft['goals'] })}
+            />
+            {(draft.goals ?? []).includes('autre') && (
+              <Field label="Précise ton objectif">
+                <Input
+                  value={draft.goalOther ?? ''}
+                  onChange={(e) => set({ goalOther: e.target.value })}
+                />
+              </Field>
             )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={saving || offline}
-              className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-white shadow-soft transition active:scale-95 disabled:opacity-50"
-              aria-label="Changer la photo"
-              title={offline ? 'Connexion requise pour changer la photo' : 'Changer la photo'}
-            >
-              <Camera className="h-4 w-4" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handlePhoto(file);
-                e.target.value = '';
-              }}
-            />
-          </div>
-          <div className="min-w-0 flex-1 space-y-1">
-            <Field label="Nom complet">
-              <Input
-                value={draft.fullName ?? ''}
-                onChange={(e) => set({ fullName: e.target.value })}
-                placeholder="Ton nom"
-              />
-            </Field>
-            <p className="truncate text-xs text-stone-400">{user?.email}</p>
-          </div>
+          </Section>
         </div>
-        {/* Empilés sur mobile : l'input date iOS déborde de sa cellule de grille
-            et chevauche le champ voisin. min-w-0 autorise aussi le rétrécissement
-            des cellules sur les écrans plus larges. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Date de naissance" className="min-w-0">
-            <Input
-              type="date"
-              value={draft.birthDate ?? ''}
-              onChange={(e) => set({ birthDate: e.target.value })}
+
+        {/* Santé */}
+        <div className="mt-4">
+          <Section icon={HeartPulse} title="Santé">
+            <MultiChoice
+              legend="Conditions médicales"
+              values={draft.medicalConditions ?? []}
+              options={toOptions(MEDICAL_CONDITION_LABELS)}
+              onChange={(mc) => set({ medicalConditions: mc as ProfileDraft['medicalConditions'] })}
             />
-          </Field>
-          <Field label="Âge" className="min-w-0">
-            <Input value={age !== null ? `${age} ans` : ''} readOnly placeholder="—" />
-          </Field>
+            {(draft.medicalConditions ?? []).includes('allergies') && (
+              <Field label="Allergies ou intolérances alimentaires">
+                <Input
+                  value={draft.allergies ?? ''}
+                  onChange={(e) => set({ allergies: e.target.value })}
+                />
+              </Field>
+            )}
+            <Field label="Médicaments actuels">
+              <Input
+                value={draft.medications ?? ''}
+                onChange={(e) => set({ medications: e.target.value })}
+              />
+            </Field>
+            {(draft.medicalConditions ?? []).includes('autre') && (
+              <Field label="Autre condition (à préciser)">
+                <Input
+                  value={draft.medicalOther ?? ''}
+                  onChange={(e) => set({ medicalOther: e.target.value })}
+                />
+              </Field>
+            )}
+          </Section>
         </div>
-        <SingleChoice
-          legend="Sexe"
-          value={draft.sex}
-          options={toOptions(SEX_LABELS)}
-          onChange={(v) => set({ sex: v as ProfileDraft['sex'] })}
-        />
-      </Section>
 
-      {/* Ma famille — vue / ajout par courriel / retrait */}
-      <div className="mt-4">
-        <Section title="Ma famille">
-          <FamilySection />
-        </Section>
-      </div>
+        {/* Alimentation */}
+        <div className="mt-4">
+          <Section icon={Apple} title="Alimentation">
+            <SingleChoice
+              legend="Fréquence de repas préférée"
+              value={draft.mealFrequency}
+              options={toOptions(MEAL_FREQUENCY_LABELS)}
+              onChange={(v) => set({ mealFrequency: v as ProfileDraft['mealFrequency'] })}
+            />
+            {draft.mealFrequency === 'autre' && (
+              <Field label="Précise ta fréquence">
+                <Input
+                  value={draft.mealFrequencyOther ?? ''}
+                  onChange={(e) => set({ mealFrequencyOther: e.target.value })}
+                />
+              </Field>
+            )}
+            <MultiChoice
+              legend="Choix alimentaires"
+              values={draft.foodChoices ?? []}
+              options={toOptions(FOOD_CHOICE_LABELS)}
+              onChange={(fc) => set({ foodChoices: fc as ProfileDraft['foodChoices'] })}
+            />
+            {(draft.foodChoices ?? []).includes('autre') && (
+              <Field label="Autre choix alimentaire (à préciser)">
+                <Input value={draft.foodOther ?? ''} onChange={(e) => set({ foodOther: e.target.value })} />
+              </Field>
+            )}
+          </Section>
+        </div>
 
-      {/* Mesures */}
-      <div className="mt-4">
-        <Section title="Mesures">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Taille (cm)">
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={draft.heightCm ?? ''}
-                onChange={(e) => set({ heightCm: e.target.value === '' ? null : Number(e.target.value) })}
+        {/* Notes — pas de carte repliable */}
+        <div className="mt-4">
+          <section className="card space-y-4">
+            <h2 className="flex items-center gap-2.5 text-sm font-bold uppercase tracking-wide text-brand-700">
+              <StickyNote className="h-4 w-4 shrink-0 text-brand-600" />
+              Notes supplémentaires
+            </h2>
+            <Field label="Notes">
+              <Textarea
+                value={draft.notes ?? ''}
+                onChange={(e) => set({ notes: e.target.value })}
+                className="min-h-[100px]"
+                placeholder="Informations ou préférences supplémentaires…"
               />
             </Field>
-            <Field label="Poids (kg)">
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={draft.weightKg ?? ''}
-                onChange={(e) => set({ weightKg: e.target.value === '' ? null : Number(e.target.value) })}
-              />
-            </Field>
+          </section>
+        </div>
+
+        {error && (
+          <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+        )}
+        {saved && (
+          <div className="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-700">
+            Profil enregistré ✓
           </div>
-        </Section>
-      </div>
-
-      {/* Activité */}
-      <div className="mt-4">
-        <Section title="Activité & forme">
-          <SingleChoice
-            legend="Niveau d’activité"
-            value={draft.activityLevel}
-            options={toOptions(ACTIVITY_LEVEL_LABELS)}
-            onChange={(v) => set({ activityLevel: v as ProfileDraft['activityLevel'] })}
-          />
-          <SingleChoice
-            legend="Activité hebdomadaire"
-            value={draft.weeklyActivity}
-            options={toOptions(WEEKLY_ACTIVITY_LABELS)}
-            onChange={(v) => set({ weeklyActivity: v as ProfileDraft['weeklyActivity'] })}
-          />
-          <SingleChoice
-            legend="Niveau de condition physique"
-            value={draft.fitnessLevel}
-            options={toOptions(FITNESS_LEVEL_LABELS)}
-            onChange={(v) => set({ fitnessLevel: v as ProfileDraft['fitnessLevel'] })}
-          />
-        </Section>
-      </div>
-
-      {/* Objectifs */}
-      <div className="mt-4">
-        <Section title="Objectifs">
-          <MultiChoice
-            legend="Objectifs physiques"
-            values={draft.goals ?? []}
-            options={toOptions(GOAL_LABELS)}
-            onChange={(goals) => set({ goals: goals as ProfileDraft['goals'] })}
-          />
-          {(draft.goals ?? []).includes('autre') && (
-            <Field label="Précise ton objectif">
-              <Input
-                value={draft.goalOther ?? ''}
-                onChange={(e) => set({ goalOther: e.target.value })}
-              />
-            </Field>
-          )}
-        </Section>
-      </div>
-
-      {/* Santé */}
-      <div className="mt-4">
-        <Section title="Santé">
-          <MultiChoice
-            legend="Conditions médicales"
-            values={draft.medicalConditions ?? []}
-            options={toOptions(MEDICAL_CONDITION_LABELS)}
-            onChange={(mc) => set({ medicalConditions: mc as ProfileDraft['medicalConditions'] })}
-          />
-          {(draft.medicalConditions ?? []).includes('allergies') && (
-            <Field label="Allergies ou intolérances alimentaires">
-              <Input
-                value={draft.allergies ?? ''}
-                onChange={(e) => set({ allergies: e.target.value })}
-              />
-            </Field>
-          )}
-          <Field label="Médicaments actuels">
-            <Input
-              value={draft.medications ?? ''}
-              onChange={(e) => set({ medications: e.target.value })}
-            />
-          </Field>
-          {(draft.medicalConditions ?? []).includes('autre') && (
-            <Field label="Autre condition (à préciser)">
-              <Input
-                value={draft.medicalOther ?? ''}
-                onChange={(e) => set({ medicalOther: e.target.value })}
-              />
-            </Field>
-          )}
-        </Section>
-      </div>
-
-      {/* Alimentation */}
-      <div className="mt-4">
-        <Section title="Alimentation">
-          <SingleChoice
-            legend="Fréquence de repas préférée"
-            value={draft.mealFrequency}
-            options={toOptions(MEAL_FREQUENCY_LABELS)}
-            onChange={(v) => set({ mealFrequency: v as ProfileDraft['mealFrequency'] })}
-          />
-          {draft.mealFrequency === 'autre' && (
-            <Field label="Précise ta fréquence">
-              <Input
-                value={draft.mealFrequencyOther ?? ''}
-                onChange={(e) => set({ mealFrequencyOther: e.target.value })}
-              />
-            </Field>
-          )}
-          <MultiChoice
-            legend="Choix alimentaires"
-            values={draft.foodChoices ?? []}
-            options={toOptions(FOOD_CHOICE_LABELS)}
-            onChange={(fc) => set({ foodChoices: fc as ProfileDraft['foodChoices'] })}
-          />
-          {(draft.foodChoices ?? []).includes('autre') && (
-            <Field label="Autre choix alimentaire (à préciser)">
-              <Input value={draft.foodOther ?? ''} onChange={(e) => set({ foodOther: e.target.value })} />
-            </Field>
-          )}
-        </Section>
-      </div>
-
-      {/* Notes */}
-      <div className="mt-4">
-        <Section title="Notes supplémentaires">
-          <Field label="Notes">
-            <Textarea
-              value={draft.notes ?? ''}
-              onChange={(e) => set({ notes: e.target.value })}
-              className="min-h-[100px]"
-              placeholder="Informations ou préférences supplémentaires…"
-            />
-          </Field>
-        </Section>
-      </div>
-
-      {error && (
-        <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
-      )}
-      {saved && (
-        <div className="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-700">
-          Profil enregistré ✓
-        </div>
-      )}
+        )}
       </main>
 
       {/* Barre d'action fixe en bas (même pattern que les footers de modales) —

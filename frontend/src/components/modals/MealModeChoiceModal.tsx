@@ -2,6 +2,7 @@ import { PenLine, Sparkles } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { cn } from '../../lib/utils';
 import { useConnection } from '../../hooks/useConnection';
+import { useSettings } from '../../api/settings';
 
 interface MealModeChoiceModalProps {
   open: boolean;
@@ -24,7 +25,14 @@ export function MealModeChoiceModal({
 }: MealModeChoiceModalProps) {
   const isEdit = variant === 'edit';
   const { status } = useConnection();
-  const aiDisabled = status !== 'online';
+  // Réglage IA de la famille : la génération/modification peut être
+  // désactivée dans les Paramètres (undefined = pas encore chargé → actif).
+  const { data: settings } = useSettings();
+  const aiDisabledBySettings = settings?.aiMealGenerationEnabled === false;
+  const aiDisabled = status !== 'online' || aiDisabledBySettings;
+  const aiDisabledReason = aiDisabledBySettings
+    ? ' — désactivée dans les paramètres.'
+    : ' — connexion requise.';
   const options = [
     {
       mode: 'ai' as const,
@@ -72,7 +80,7 @@ export function MealModeChoiceModal({
                 <span className="block text-sm font-bold text-stone-800">{title}</span>
                 <span className="block text-xs leading-relaxed text-stone-500">
                   {description}
-                  {disabled && ' — connexion requise.'}
+                  {disabled && aiDisabledReason}
                 </span>
               </span>
             </button>

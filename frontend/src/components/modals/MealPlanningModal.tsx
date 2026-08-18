@@ -6,14 +6,15 @@ import { Field, Select } from '../ui/FormControl';
 import { NumberStepper } from '../ui/NumberStepper';
 import { MealCarousel } from '../meals/MealCarousel';
 import { DateRangePicker } from '../calendar/DateRangePicker';
-import { STATUS_OPTIONS, MEAL_TYPE_OPTIONS } from '../../lib/options';
+import { STATUS_OPTIONS } from '../../lib/options';
 import { todayValue, cn, formatQty } from '../../lib/utils';
 import { useCreateMealPlan, useUpdateMealPlan, useDeleteMealPlan } from '../../api/mealPlans';
 import type { IngredientSelection } from '../../api/mealPlans';
 import { useMeals } from '../../api/meals';
 import { useConnection } from '../../hooks/useConnection';
+import { useOptionList } from '../../hooks/useOptionList';
 import { AISLE_LABELS, AISLE_OPTIONS } from '../../types';
-import type { Ingredient, Meal, MealPlan, MealPlanStatus, MealType } from '../../types';
+import type { Ingredient, Meal, MealPlan, MealPlanStatus } from '../../types';
 
 interface MealPlanningModalProps {
   plan?: MealPlan | null; // null = création
@@ -41,7 +42,9 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate, defaultMea
   const [toDate, setToDate] = useState<string>(toDateOnly(plan?.toDate) ?? fallback);
   const [servings, setServings] = useState<number>(plan?.servings ?? 2);
   const [status, setStatus] = useState<MealPlanStatus>((plan?.status ?? 'a_faire') as MealPlanStatus);
-  const [mealType, setMealType] = useState<MealType | ''>((plan?.mealType ?? '') as MealType | '');
+  const [mealType, setMealType] = useState<string>((plan?.mealType ?? '') as string);
+  // Types de repas paramétrables de la famille (Paramètres).
+  const { options: mealTypeOptions } = useOptionList('meal_type');
   const [error, setError] = useState<string | null>(null);
   // Étape 2 : sélection des ingrédients à envoyer en liste de courses.
   const [step, setStep] = useState<1 | 2>(1);
@@ -83,7 +86,7 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate, defaultMea
       setToDate(toDateOnly(plan?.toDate) ?? fb);
       setServings(plan?.servings ?? 2);
       setStatus((plan?.status ?? 'a_faire') as MealPlanStatus);
-      setMealType((plan?.mealType ?? '') as MealType | '');
+      setMealType((plan?.mealType ?? '') as string);
       setError(null);
       setStep(1);
       setUnchecked(new Set());
@@ -289,10 +292,10 @@ export function MealPlanningModal({ plan, open, onClose, defaultDate, defaultMea
         <Field label="Type de repas">
           <Select
             value={mealType}
-            onChange={(e) => setMealType(e.target.value as MealType | '')}
+            onChange={(e) => setMealType(e.target.value)}
           >
             <option value="">—</option>
-            {MEAL_TYPE_OPTIONS.map((o) => (
+            {mealTypeOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>

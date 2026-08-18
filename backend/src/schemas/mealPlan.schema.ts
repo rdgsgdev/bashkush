@@ -2,8 +2,12 @@ import { z } from 'zod';
 
 export const mealPlanStatusEnum = z.enum(['a_faire', 'en_preparation', 'prepare']);
 
-/** Moment de consommation du repas planifié. */
-export const mealTypeEnum = z.enum(['petit_dejeuner', 'brunch', 'diner', 'souper', 'collation']);
+/**
+ * Moment de consommation du repas planifié. Liste paramétrable par famille
+ * (Paramètres) : on accepte toute clé — les valeurs retirées d'une liste
+ * restent valides pour les planifications existantes.
+ */
+export const mealTypeEnum = z.string().min(1).max(60);
 
 /**
  * Sélection d'ingrédients faite par l'utilisateur dans la modale de

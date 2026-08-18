@@ -11,4 +11,6 @@ export const queryKeys = {
   familyInvitations: ['family', 'invitations'] as const,
   familyMembers: ['family', 'members'] as const,
   aiMeal: ['ai', 'meal'] as const,
+  settings: ['settings'] as const,
+  lists: (listKey: string) => ['lists', listKey] as const,
 };

@@ -4,22 +4,10 @@ import { z } from 'zod';
 
 export const difficultyEnum = z.enum(['facile', 'moyen', 'difficile']);
 // Type de plat (nature de la recette — PAS le moment du repas, qui est
-// porté par MealPlan.mealType).
-export const categoryEnum = z.enum([
-  'bowl',
-  'wrap',
-  'salad',
-  'soup',
-  'sandwich',
-  'pasta',
-  'stir_fry',
-  'dessert',
-  'smoothie',
-  'snack_food',
-  'side',
-  'main',
-  'beverage',
-]);
+// porté par MealPlan.mealType). Liste paramétrable par famille (Paramètres) :
+// on accepte toute clé — les valeurs retirées d'une liste restent valides
+// pour les plats existants (même philosophie que les rayons personnalisés).
+export const categoryEnum = z.string().min(1).max(60);
 
 // Rayons par défaut (les rayons personnalisés sont aussi autorisés : on accepte toute string).
 export const aisleName = z.string().min(1).max(60);

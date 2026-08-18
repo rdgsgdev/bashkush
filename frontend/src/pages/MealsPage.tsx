@@ -12,7 +12,7 @@ import { MealAIGenerationModal } from '../components/modals/MealAIGenerationModa
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useMeals } from '../api/meals';
-import { Category, Difficulty } from '../types';
+import { Difficulty } from '../types';
 
 /** Minuscules sans accents, pour une recherche insensible aux diacritiques. */
 function normalizeText(value: string) {
@@ -28,7 +28,7 @@ export function MealsPage() {
 
   // Filtres/tri de la liste (état local, remis à zéro en quittant la page).
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<Category | 'all'>('all');
+  const [category, setCategory] = useState<string | 'all'>('all');
   const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<MealSort>('recent');

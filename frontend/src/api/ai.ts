@@ -2,14 +2,15 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { api } from './client';
-import type { Category, Difficulty, MealDraft, Nutrition } from '../types';
+import type { Difficulty, MealDraft, Nutrition } from '../types';
 
 export interface GenerateMealPayload {
   /** userId des profils (membres de la famille) pris en compte. */
   memberIds: string[];
   servings: number;
   difficulty?: Difficulty;
-  category?: Category;
+  /** Clé de la liste paramétrable « category » de la famille (Paramètres). */
+  category?: string;
   desiredIngredients?: string[];
   description?: string;
   /** Plat précédemment généré (régénération via chat). */

@@ -9,7 +9,8 @@ import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedb
 import { useGrocery, useToggleCheck } from '../api/grocery';
 import { useMealPlans } from '../api/mealPlans';
 import { todayValue, parseDate, formatShortDate, aisleColor, cn } from '../lib/utils';
-import { AISLE_LABELS, STATUS_LABELS, MEAL_TYPE_LABELS } from '../types';
+import { AISLE_LABELS, STATUS_LABELS } from '../types';
+import { useOptionLabel } from '../hooks/useOptionList';
 import type { MealPlan, MealPlanStatus } from '../types';
 
 const STATUS_COLORS: Record<MealPlanStatus, string> = {
@@ -31,6 +32,8 @@ function PlanRow({ plan, onOpen }: { plan: MealPlan; onOpen: (plan: MealPlan) =>
   const meal = plan.meal;
   const totalSteps = meal.steps?.length ?? 0;
   const doneSteps = plan.completedSteps?.length ?? 0;
+  // Types de repas paramétrables de la famille (Paramètres).
+  const mealTypeLabel = useOptionLabel('meal_type');
 
   return (
     <button
@@ -49,7 +52,7 @@ function PlanRow({ plan, onOpen }: { plan: MealPlan; onOpen: (plan: MealPlan) =>
         <p className="mt-0.5 text-xs text-stone-400">
           Du {formatShortDate(plan.fromDate)} au {formatShortDate(plan.toDate)} · {plan.servings}{' '}
           portion{plan.servings > 1 ? 's' : ''}
-          {plan.mealType ? ` · ${MEAL_TYPE_LABELS[plan.mealType]}` : ''}
+          {plan.mealType ? ` · ${mealTypeLabel(plan.mealType)}` : ''}
         </p>
         <div className="mt-1.5 flex items-center gap-2">
           <span

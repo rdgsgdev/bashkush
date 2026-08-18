@@ -10,7 +10,8 @@ import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedb
 import { useMealPlansForDate, useMealPlansForRange } from '../api/mealPlans';
 import { buildPlannedDays } from '../lib/plans';
 import { todayValue, formatShortDate, cn } from '../lib/utils';
-import { STATUS_LABELS, MEAL_TYPE_LABELS } from '../types';
+import { STATUS_LABELS } from '../types';
+import { useOptionLabel } from '../hooks/useOptionList';
 import type { MealPlanStatus } from '../types';
 
 const STATUS_COLORS: Record<MealPlanStatus, string> = {
@@ -22,6 +23,8 @@ const STATUS_COLORS: Record<MealPlanStatus, string> = {
 export function CalendarPage() {
   const [params, setParams] = useSearchParams();
   const activeDate = params.get('date') ?? todayValue();
+  // Types de repas paramétrables de la famille (Paramètres).
+  const mealTypeLabel = useOptionLabel('meal_type');
 
   const setDate = (d: string) => {
     params.set('date', d);
@@ -126,7 +129,7 @@ export function CalendarPage() {
                       <p className="mt-0.5 text-xs text-stone-400">
                         Du {formatShortDate(plan.fromDate)} au {formatShortDate(plan.toDate)} ·{' '}
                         {plan.servings} portion{plan.servings > 1 ? 's' : ''}
-                        {plan.mealType ? ` · ${MEAL_TYPE_LABELS[plan.mealType]}` : ''}
+                        {plan.mealType ? ` · ${mealTypeLabel(plan.mealType)}` : ''}
                       </p>
                       <span
                         className={cn(

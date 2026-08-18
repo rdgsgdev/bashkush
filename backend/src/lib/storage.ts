@@ -7,6 +7,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'image/svg+xml': 'svg',
 };
 
 export interface UploadResult {
@@ -20,7 +21,7 @@ export interface UploadResult {
 export async function uploadImage(
   buffer: Buffer,
   mimetype: string,
-  mealId: string,
+  mealId: string, // dossier de destination (id du plat, ou d'une option de liste)
 ): Promise<UploadResult> {
   const ext = EXT_BY_MIME[mimetype];
   if (!ext) throw new HttpError(400, 'Format d’image non supporté');
@@ -57,7 +58,7 @@ export async function ensureBucket(): Promise<void> {
   const { error } = await supabase.storage.createBucket(STORAGE_BUCKET, {
     public: true,
     fileSizeLimit: 5 * 1024 * 1024,
-    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'],
   });
   if (error) {
     if (/already exist/i.test(error.message)) return; // bucket déjà présent : OK

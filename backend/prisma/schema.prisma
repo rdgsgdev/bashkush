@@ -72,13 +72,42 @@ model Family {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now()) @map("created_at")
 
+  // Réglages IA partagés par toute la famille (page Paramètres).
+  aiMealGenerationEnabled Boolean @default(true) @map("ai_meal_generation_enabled") // génération / modification de plats
+  aiNutritionEnabled      Boolean @default(true) @map("ai_nutrition_enabled") // complétion des apports d'un ingrédient
+
   profiles     Profile[]
   members      FamilyMember[]
   meals        Meal[]
   mealPlans    MealPlan[]
   groceryItems GroceryItem[]
+  listOptions  ListOption[]
 
   @@map("families")
+}
+
+// ── Options des listes paramétrables ─────────────────────────
+// Listes éditables dans la page Paramètres, scopées à une famille :
+// catégories de plats, unités, magasins, types de repas.
+// (Les rayons ont leur propre table grocery_aisles.)
+
+model ListOption {
+  id        String   @id @default(uuid())
+  familyId  String   @map("family_id")
+  listKey   String   @map("list_key") // category | unit | store | meal_type
+  value     String // clé technique (ex: bowl, g, maxi, diner) — référencée par les données
+  label     String // libellé affiché
+  sortOrder Int      @default(0) @map("sort_order")
+  logoUrl   String?  @map("logo_url") // logo du magasin (Supabase Storage) — stores uniquement
+  logoPath  String?  @map("logo_path") // chemin dans le bucket (suppression)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, listKey, value])
+  @@index([familyId, listKey])
+  @@map("list_options")
 }
 
 // Invitation au sein d'une famille : invitedById invite memberEmail.

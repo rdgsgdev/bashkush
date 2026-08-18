@@ -37,8 +37,26 @@ CREATE TABLE "profiles" (
 CREATE TABLE "families" (
     "id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ai_meal_generation_enabled" BOOLEAN NOT NULL DEFAULT true,
+    "ai_nutrition_enabled" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "families_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "list_options" (
+    "id" TEXT NOT NULL,
+    "family_id" TEXT NOT NULL,
+    "list_key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "sort_order" INTEGER NOT NULL DEFAULT 0,
+    "logo_url" TEXT,
+    "logo_path" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "list_options_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -187,6 +205,15 @@ CREATE INDEX "family_members_member_email_idx" ON "family_members"("member_email
 
 -- CreateIndex
 CREATE INDEX "meals_family_id_idx" ON "meals"("family_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "list_options_family_id_list_key_value_key" ON "list_options"("family_id", "list_key", "value");
+
+-- CreateIndex
+CREATE INDEX "list_options_family_id_list_key_idx" ON "list_options"("family_id", "list_key");
+
+-- AddForeignKey
+ALTER TABLE "list_options" ADD CONSTRAINT "list_options_family_id_fkey" FOREIGN KEY ("family_id") REFERENCES "families"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ingredients" ADD CONSTRAINT "ingredients_meal_id_fkey" FOREIGN KEY ("meal_id") REFERENCES "meals"("id") ON DELETE CASCADE ON UPDATE CASCADE;

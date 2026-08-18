@@ -12,25 +12,26 @@ import { ensureFamilyId } from '../lib/family';
 import { computeDailyTargets } from '../lib/nutrition';
 import { slugify } from '../lib/id';
 import { perplexityChatJSON, fetchIngredientNutritionFromSonar } from '../lib/perplexity';
+import { getListOptions, getFamilySettings, DEFAULT_LISTS } from '../lib/listOptions';
 import {
   generateMealRequestSchema,
   GenerateMealRequest,
   ingredientNutritionQuerySchema,
 } from '../schemas/ai.schema';
-import { difficultyEnum, categoryEnum, CreateMealInput } from '../schemas/meal.schema';
+import { difficultyEnum, CreateMealInput } from '../schemas/meal.schema';
 import type { Response } from 'express';
 
-// ── Listes fermées (miroir des options du frontend) ──────────
+// ── Listes de référence (défauts — remplacées par les listes de la famille) ──
 
-const UNITS = [
+const DEFAULT_UNITS = [
   'g', 'kg', 'ml', 'L', 'c. à soupe', 'c. à café', 'pièce',
   'bouquet', 'gousse', 'tranche', 'boîte', 'tasse',
-] as const;
+];
 
-const AISLES = [
+const DEFAULT_AISLES = [
   'fruits_legumes', 'proteines', 'feculents', 'cremerie', 'epicerie_seche',
   'conserves', 'surgelas', 'boissons', 'epices_condiments',
-] as const;
+];
 
 // ── Libellés FR des enums du profil ──────────────────────────
 
@@ -69,7 +70,8 @@ const MEAL_FREQUENCY_LABELS: Record<string, string> = {
   autre: 'autre',
 };
 
-// Libellés FR des types de plat (contrainte lisible dans le prompt).
+// Libellés FR des types de plat par défaut (repli pour les catégories
+// historiques ; les libellés des listes personnalisées viennent de la famille).
 const CATEGORY_PROMPT_LABELS: Record<string, string> = {
   bowl: 'bol (bowl)',
   wrap: 'wrap',
@@ -90,149 +92,158 @@ const CATEGORY_PROMPT_LABELS: Record<string, string> = {
 // Tous les champs sont requis et typés simplement (le modèle met
 // 0 ou chaîne vide quand l'info n'a pas de sens) ; la
 // normalisation en null/undefined se fait côté serveur ensuite.
+// Les listes fermées (catégories, unités, rayons) sont celles,
+// paramétrables, de la famille.
 
-const mealJsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: [
-    'name', 'description', 'servings', 'prepTime', 'cookTime', 'totalTime',
-    'difficulty', 'category', 'nutrition', 'notes', 'ingredients', 'steps',
-  ],
-  properties: {
-    name: {
-      type: 'string',
-      description:
-        'Nom de plat original, comme sur une carte de restaurant — très court (2 à 4 mots, ex : « Le marin croquant »), ' +
-        'évoquant la composition ; sans type générique du plat (« Bol », « Salade »…) ni liste d’ingrédients',
-    },
-    description: { type: 'string', description: 'Description en 1-2 phrases (peut être vide)' },
-    servings: { type: 'integer', description: 'Nombre de portions total de la recette' },
-    prepTime: { type: 'integer', description: 'Temps de préparation en minutes (0 si inconnu)' },
-    cookTime: { type: 'integer', description: 'Temps de cuisson en minutes (0 si aucun)' },
-    totalTime: { type: 'integer', description: 'Temps total en minutes' },
-    difficulty: { type: 'string', enum: ['facile', 'moyen', 'difficile'] },
-    category: {
-      type: 'string',
-      enum: [
-        'bowl', 'wrap', 'salad', 'soup', 'sandwich', 'pasta', 'stir_fry',
-        'dessert', 'smoothie', 'snack_food', 'side', 'main', 'beverage',
-      ],
-      description:
-        'Type de plat : bowl (bol), wrap, salad (salade), soup (soupe), sandwich, ' +
-        'pasta (pâtes), stir_fry (sauté/wok), dessert, smoothie, snack_food (collation salée/sucée), ' +
-        'side (accompagnement), main (plat principal), beverage (boisson)',
-    },
-    nutrition: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
-      description: 'Apports nutritionnels PAR portion',
-      properties: {
-        calories: { type: 'number', description: 'kcal par portion' },
-        protein: { type: 'number', description: 'grammes de protéines par portion' },
-        carbs: { type: 'number', description: 'grammes de glucides par portion' },
-        fat: { type: 'number', description: 'grammes de lipides par portion' },
-        fiber: { type: 'number', description: 'grammes de fibres par portion' },
+function buildMealJsonSchema(
+  categories: { value: string; label: string }[],
+  units: string[],
+  aisles: string[],
+) {
+  const categoryLabels = Object.fromEntries(
+    categories.map((c) => [c.value, CATEGORY_PROMPT_LABELS[c.value] ?? c.label]),
+  );
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'name', 'description', 'servings', 'prepTime', 'cookTime', 'totalTime',
+      'difficulty', 'category', 'nutrition', 'notes', 'ingredients', 'steps',
+    ],
+    properties: {
+      name: {
+        type: 'string',
+        description:
+          'Nom de plat original, comme sur une carte de restaurant — très court (2 à 4 mots, ex : « Le marin croquant »), ' +
+          'évoquant la composition ; sans type générique du plat (« Bol », « Salade »…) ni liste d’ingrédients',
       },
-    },
-    notes: { type: 'string', description: 'Conseils, astuces (peut être vide)' },
-    ingredients: {
-      type: 'array',
-      description: 'Ingrédients pour le nombre total de portions',
-      items: {
+      description: { type: 'string', description: 'Description en 1-2 phrases (peut être vide)' },
+      servings: { type: 'integer', description: 'Nombre de portions total de la recette' },
+      prepTime: { type: 'integer', description: 'Temps de préparation en minutes (0 si inconnu)' },
+      cookTime: { type: 'integer', description: 'Temps de cuisson en minutes (0 si aucun)' },
+      totalTime: { type: 'integer', description: 'Temps total en minutes' },
+      difficulty: { type: 'string', enum: ['facile', 'moyen', 'difficile'] },
+      category: {
+        type: 'string',
+        enum: categories.map((c) => c.value),
+        description: `Type de plat : ${categories.map((c) => `${c.value} (${categoryLabels[c.value]})`).join(', ')}`,
+      },
+      nutrition: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'quantity', 'unit', 'aisle', 'optional', 'notes', 'nutrition'],
+        required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
+        description: 'Apports nutritionnels PAR portion',
         properties: {
-          name: { type: 'string', description: 'Nom de l’ingrédient en français' },
-          quantity: { type: 'number', description: 'Quantité totale pour toutes les portions' },
-          unit: { type: 'string', enum: [...UNITS] },
-          aisle: { type: 'string', enum: [...AISLES], description: 'Rayon d’épicerie' },
-          optional: { type: 'boolean' },
-          notes: { type: 'string', description: 'Précision (peut être vide)' },
-          nutrition: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
-            description: 'Apports TOTAUX de cet ingrédient pour la quantité indiquée (toutes portions)',
-            properties: {
-              calories: { type: 'number', description: 'kcal totaux de l’ingrédient' },
-              protein: { type: 'number', description: 'grammes de protéines totaux' },
-              carbs: { type: 'number', description: 'grammes de glucides totaux' },
-              fat: { type: 'number', description: 'grammes de lipides totaux' },
-              fiber: { type: 'number', description: 'grammes de fibres totaux' },
+          calories: { type: 'number', description: 'kcal par portion' },
+          protein: { type: 'number', description: 'grammes de protéines par portion' },
+          carbs: { type: 'number', description: 'grammes de glucides par portion' },
+          fat: { type: 'number', description: 'grammes de lipides par portion' },
+          fiber: { type: 'number', description: 'grammes de fibres par portion' },
+        },
+      },
+      notes: { type: 'string', description: 'Conseils, astuces (peut être vide)' },
+      ingredients: {
+        type: 'array',
+        description: 'Ingrédients pour le nombre total de portions',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'quantity', 'unit', 'aisle', 'optional', 'notes', 'nutrition'],
+          properties: {
+            name: { type: 'string', description: 'Nom de l’ingrédient en français' },
+            quantity: { type: 'number', description: 'Quantité totale pour toutes les portions' },
+            unit: { type: 'string', enum: units },
+            aisle: { type: 'string', enum: aisles, description: 'Rayon d’épicerie' },
+            optional: { type: 'boolean' },
+            notes: { type: 'string', description: 'Précision (peut être vide)' },
+            nutrition: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['calories', 'protein', 'carbs', 'fat', 'fiber'],
+              description: 'Apports TOTAUX de cet ingrédient pour la quantité indiquée (toutes portions)',
+              properties: {
+                calories: { type: 'number', description: 'kcal totaux de l’ingrédient' },
+                protein: { type: 'number', description: 'grammes de protéines totaux' },
+                carbs: { type: 'number', description: 'grammes de glucides totaux' },
+                fat: { type: 'number', description: 'grammes de lipides totaux' },
+                fiber: { type: 'number', description: 'grammes de fibres totaux' },
+              },
             },
           },
         },
       },
-    },
-    steps: {
-      type: 'array',
-      description: 'Étapes numérotées à partir de 1',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['stepNumber', 'instruction', 'time'],
-        properties: {
-          stepNumber: { type: 'integer' },
-          instruction: { type: 'string', description: 'Instruction claire et complète' },
-          time: { type: 'integer', description: 'Durée de l’étape en minutes (0 si non pertinent)' },
+      steps: {
+        type: 'array',
+        description: 'Étapes numérotées à partir de 1',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['stepNumber', 'instruction', 'time'],
+          properties: {
+            stepNumber: { type: 'integer' },
+            instruction: { type: 'string', description: 'Instruction claire et complète' },
+            time: { type: 'integer', description: 'Durée de l’étape en minutes (0 si non pertinent)' },
+          },
         },
       },
     },
-  },
-} as const;
+  } as const;
+}
 
 // ── Validation de la réponse IA ──────────────────────────────
-
-const aiMealResponseSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  description: z.string().max(1000),
-  servings: z.number().int().min(1).max(50),
-  prepTime: z.number().int().nonnegative(),
-  cookTime: z.number().int().nonnegative(),
-  totalTime: z.number().int().nonnegative(),
-  difficulty: difficultyEnum,
-  category: categoryEnum,
-  nutrition: z.object({
-    calories: z.number().nonnegative(),
-    protein: z.number().nonnegative(),
-    carbs: z.number().nonnegative(),
-    fat: z.number().nonnegative(),
-    fiber: z.number().nonnegative(),
-  }),
-  notes: z.string().max(2000),
-  ingredients: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(120),
-        quantity: z.number(),
-        unit: z.string().trim().min(1).max(30),
-        aisle: z.string().trim().min(1).max(60),
-        optional: z.boolean(),
-        notes: z.string().max(300),
-        // Apports totaux de l'ingrédient pour sa quantité (optionnel :
-        // tolérant si l'IA omet, bien que le schéma strict les exige).
-        nutrition: z
-          .object({
-            calories: z.number().nonnegative(),
-            protein: z.number().nonnegative(),
-            carbs: z.number().nonnegative(),
-            fat: z.number().nonnegative(),
-            fiber: z.number().nonnegative(),
-          })
-          .optional(),
-      }),
-    )
-    .min(1),
-  steps: z.array(
-    z.object({
-      stepNumber: z.number().int().nonnegative(),
-      instruction: z.string().trim().min(1).max(1000),
-      time: z.number().int().nonnegative(),
+/** La catégorie est validée contre la liste paramétrable de la famille. */
+function buildAiMealResponseSchema(validCategories: string[]) {
+  return z.object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().max(1000),
+    servings: z.number().int().min(1).max(50),
+    prepTime: z.number().int().nonnegative(),
+    cookTime: z.number().int().nonnegative(),
+    totalTime: z.number().int().nonnegative(),
+    difficulty: difficultyEnum,
+    category: z
+      .string()
+      .refine((c) => validCategories.includes(c), 'Catégorie hors liste'),
+    nutrition: z.object({
+      calories: z.number().nonnegative(),
+      protein: z.number().nonnegative(),
+      carbs: z.number().nonnegative(),
+      fat: z.number().nonnegative(),
+      fiber: z.number().nonnegative(),
     }),
-  ),
-});
+    notes: z.string().max(2000),
+    ingredients: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(120),
+          quantity: z.number(),
+          unit: z.string().trim().min(1).max(30),
+          aisle: z.string().trim().min(1).max(60),
+          optional: z.boolean(),
+          notes: z.string().max(300),
+          // Apports totaux de l'ingrédient pour sa quantité (optionnel :
+          // tolérant si l'IA omet, bien que le schéma strict les exige).
+          nutrition: z
+            .object({
+              calories: z.number().nonnegative(),
+              protein: z.number().nonnegative(),
+              carbs: z.number().nonnegative(),
+              fat: z.number().nonnegative(),
+              fiber: z.number().nonnegative(),
+            })
+            .optional(),
+        }),
+      )
+      .min(1),
+    steps: z.array(
+      z.object({
+        stepNumber: z.number().int().nonnegative(),
+        instruction: z.string().trim().min(1).max(1000),
+        time: z.number().int().nonnegative(),
+      }),
+    ),
+  });
+}
 
 // ── Construction du prompt ───────────────────────────────────
 
@@ -283,7 +294,9 @@ function memberFiche(profile: Profile): string {
   return lines.join('\n');
 }
 
-const SYSTEM_PROMPT = `Tu es un chef nutritionniste francophone. Tu crées des recettes équilibrées, réalistes et appétissantes, adaptées aux profils nutritionnels qu'on te fournit.
+/** System prompt — les listes fermées sont celles, paramétrables, de la famille. */
+function buildSystemPrompt(units: string[], aisles: string[]): string {
+  return `Tu es un chef nutritionniste francophone. Tu crées des recettes équilibrées, réalistes et appétissantes, adaptées aux profils nutritionnels qu'on te fournit.
 
 Règles impératives :
 - Réponds UNIQUEMENT avec un objet JSON conforme au schéma fourni, sans texte autour.
@@ -291,16 +304,24 @@ Règles impératives :
 - Les apports nutritionnels (nutrition) sont PAR PORTION, avec des valeurs réalistes et cohérentes avec les ingrédients.
 - Pour CHAQUE ingrédient, renseigne ses apports TOTAUX (nutrition de l'ingrédient) pour la quantité indiquée : la somme des apports de tous les ingrédients, divisée par le nombre de portions, doit correspondre aux apports par portion du plat.
 - Les temps sont en minutes ; totalTime = prepTime + cookTime.
-- Les unités doivent être choisies parmi : ${UNITS.join(', ')}.
-- Le rayon (aisle) de chaque ingrédient doit être choisi parmi : ${AISLES.join(', ')}.
+- Les unités doivent être choisies parmi : ${units.join(', ')}.
+- Le rayon (aisle) de chaque ingrédient doit être choisi parmi : ${aisles.join(', ')}.
 - Les étapes sont numérotées à partir de 1, claires et complètes (températures, quantités).
 - NE JAMAIS inclure un ingrédient auquel un membre est allergique ; adapte la recette en conséquence.
 - Les quantités doivent permettre à chaque membre de s'approcher de ses objectifs caloriques et protéiques pour sa part des portions.
 - Convention de nommage : le nom est un nom de plat original, comme sur la carte d'un restaurant — très court (2 à 4 mots, article possible), ex : « Le marin croquant », « Aurore méditerranéenne », « Braise du sud-ouest ». Il évoque la composition du plat en lien direct ou indirect (ingrédient phare, origine culinaire, couleur, saison, ambiance). INTERDIT : mentionner le type ou le format générique du plat (« Bol », « Salade », « Curry », « Wrap », « Smoothie »…) et lister les ingrédients (ex : « Bol quinoa poulet avocat »).
 - Les noms, ingrédients et instructions sont en français.`;
+}
 
-function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): string {
+function buildUserPrompt(
+  request: GenerateMealRequest,
+  profiles: Profile[],
+  categories: { value: string; label: string }[],
+): string {
   const sections: string[] = [];
+  const categoryLabels = Object.fromEntries(
+    categories.map((c) => [c.value, CATEGORY_PROMPT_LABELS[c.value] ?? c.label]),
+  );
 
   sections.push(`Membres pour lesquels générer le plat (données de leurs profils) :\n${profiles.map(memberFiche).join('\n')}`);
 
@@ -312,7 +333,7 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
   const constraints: string[] = [];
   if (request.difficulty) constraints.push(`Difficulté souhaitée : ${request.difficulty}.`);
   if (request.category) {
-    constraints.push(`Type de plat : ${CATEGORY_PROMPT_LABELS[request.category]}.`);
+    constraints.push(`Type de plat : ${categoryLabels[request.category] ?? request.category}.`);
   }
   if (request.desiredIngredients?.length) {
     constraints.push(`Ingrédients souhaités (doivent apparaître dans la recette) : ${request.desiredIngredients.join(', ')}.`);
@@ -336,9 +357,11 @@ function buildUserPrompt(request: GenerateMealRequest, profiles: Profile[]): str
 
 // ── Normalisation de la réponse en CreateMealInput ───────────
 
+type AiMealResponse = z.infer<ReturnType<typeof buildAiMealResponseSchema>>;
+
 /** 0 / chaîne vide → null ; ids d'ingrédients générés et uniques. */
 function normalizeMeal(
-  ai: z.infer<typeof aiMealResponseSchema>,
+  ai: AiMealResponse,
   servings: number,
   /** Modification d'un plat existant : le nom est imposé (jamais régénéré). */
   previousName?: string | null,
@@ -398,6 +421,29 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
 
   const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
 
+  // Réglage IA de la famille : la génération peut être désactivée (Paramètres).
+  const settings = await getFamilySettings(familyId);
+  if (!settings.aiMealGenerationEnabled) {
+    throw new HttpError(403, 'La génération de plats par IA est désactivée dans les paramètres.');
+  }
+
+  // Listes paramétrables de la famille : l'IA doit les respecter.
+  // Liste vidée entièrement → repli sur les défauts (un enum vide dans le
+  // schéma JSON ferait échouer la génération).
+  const [categories, units, aisleRows] = await Promise.all([
+    getListOptions(familyId, 'category'),
+    getListOptions(familyId, 'unit'),
+    prisma.groceryAisle.findMany({ orderBy: { sortOrder: 'asc' }, select: { name: true } }),
+  ]);
+  const safeCategories = categories.length > 0 ? categories : DEFAULT_LISTS.category;
+  const unitValues = units.length > 0 ? units.map((u) => u.value) : DEFAULT_UNITS;
+  const aisleNames = aisleRows.length > 0 ? aisleRows.map((a) => a.name) : DEFAULT_AISLES;
+
+  // La catégorie demandée doit exister dans la liste de la famille.
+  if (request.category && !safeCategories.some((c) => c.value === request.category)) {
+    throw new HttpError(400, `Type de plat inconnu : ${request.category}`);
+  }
+
   // Seuls les profils de MA famille sont acceptés.
   const profiles = await prisma.profile.findMany({
     where: { familyId, userId: { in: request.memberIds } },
@@ -405,13 +451,13 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
   if (profiles.length === 0) throw new HttpError(404, 'Aucun membre valide sélectionné');
 
   const meal = await perplexityChatJSON<unknown>({
-    system: SYSTEM_PROMPT,
-    user: buildUserPrompt(request, profiles),
+    system: buildSystemPrompt(unitValues, aisleNames),
+    user: buildUserPrompt(request, profiles, safeCategories),
     schemaName: 'meal',
-    jsonSchema: mealJsonSchema as unknown as Record<string, unknown>,
+    jsonSchema: buildMealJsonSchema(safeCategories, unitValues, aisleNames) as unknown as Record<string, unknown>,
   });
 
-  const parsed = aiMealResponseSchema.safeParse(meal);
+  const parsed = buildAiMealResponseSchema(safeCategories.map((c) => c.value)).safeParse(meal);
   if (!parsed.success) {
     // eslint-disable-next-line no-console
     console.error('Réponse IA non conforme :', parsed.error.flatten().fieldErrors);
@@ -430,6 +476,14 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
  */
 export const getIngredientNutrition = asyncHandler(async (req: AuthedRequest, res: Response) => {
   const { name, quantity, unit } = ingredientNutritionQuerySchema.parse(req.body);
+
+  // Réglage IA de la famille : la complétion peut être désactivée (Paramètres).
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+  const settings = await getFamilySettings(familyId);
+  if (!settings.aiNutritionEnabled) {
+    throw new HttpError(403, 'La complétion IA des apports est désactivée dans les paramètres.');
+  }
+
   const nutrition = await fetchIngredientNutritionFromSonar(name, quantity, unit);
   res.json({ nutrition });
 });

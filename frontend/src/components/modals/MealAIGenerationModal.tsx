@@ -9,8 +9,9 @@ import { useFamilyMembers } from '../../api/family';
 import { useGenerateMeal, GenerateMealPayload } from '../../api/ai';
 import { useCreateMeal, useUpdateMeal } from '../../api/meals';
 import { getApiErrorMessage } from '../../api/client';
-import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS } from '../../lib/options';
-import type { Meal, MealDraft, Difficulty, Category } from '../../types';
+import { useOptionList } from '../../hooks/useOptionList';
+import { DIFFICULTY_OPTIONS } from '../../lib/options';
+import type { Meal, MealDraft, Difficulty } from '../../types';
 import type { FamilyMemberProfileView } from '../../types/family';
 import { cn } from '../../lib/utils';
 
@@ -126,12 +127,14 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
   const generate = useGenerateMeal();
   const createMeal = useCreateMeal();
   const updateMeal = useUpdateMeal();
+  // Catégories paramétrables de la famille (l'IA les respecte).
+  const { options: categoryOptions } = useOptionList('category');
 
   // ── Formulaire (création) ─────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [servings, setServings] = useState(2);
   const [difficulty, setDifficulty] = useState<'' | Difficulty>('');
-  const [category, setCategory] = useState<'' | Category>('');
+  const [category, setCategory] = useState<'' | string>('');
   const [desiredIngredients, setDesiredIngredients] = useState<string[]>([]);
   const [ingredientInput, setIngredientInput] = useState('');
   const [description, setDescription] = useState('');
@@ -318,9 +321,9 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
           </Select>
         </Field>
         <Field label="Catégorie (optionnel)">
-          <Select value={category} onChange={(e) => setCategory(e.target.value as '' | Category)}>
+          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Non définie</option>
-            {CATEGORY_OPTIONS.map((o) => (
+            {categoryOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </Select>
