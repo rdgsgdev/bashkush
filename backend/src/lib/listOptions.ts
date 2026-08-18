@@ -72,11 +72,11 @@ export async function getListOptions(
   familyId: string,
   listKey: ListKey,
   opts: { materialize?: boolean } = {},
-): Promise<{ id: string; value: string; label: string; sortOrder: number }[]> {
+): Promise<{ id: string; value: string; label: string; sortOrder: number; logoUrl?: string | null }[]> {
   const rows = await prisma.listOption.findMany({
     where: { familyId, listKey },
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
-    select: { id: true, value: true, label: true, sortOrder: true },
+    select: { id: true, value: true, label: true, sortOrder: true, logoUrl: true },
   });
   if (rows.length > 0) return rows;
 
@@ -104,7 +104,7 @@ export async function getListOptions(
   return prisma.listOption.findMany({
     where: { familyId, listKey },
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
-    select: { id: true, value: true, label: true, sortOrder: true },
+    select: { id: true, value: true, label: true, sortOrder: true, logoUrl: true },
   });
 }
 
