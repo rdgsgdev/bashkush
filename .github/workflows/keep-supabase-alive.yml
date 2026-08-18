@@ -1,0 +1,50 @@
+# Garde le projet Supabase actif.
+#
+# Le free tier met en pause le projet après 7 jours d'inactivité (mesurée sur
+# les requêtes API entrantes). Un simple GET sur la racine de l'API REST suffit
+# à compter comme activité : aucune table n'est lue ou écrite, donc aucune
+# pollution de la base.
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   - SUPABASE_URL        ex: https://xxxxxxxx.supabase.co
+#   - SUPABASE_ANON_KEY   la clé anon (publique par design, jamais service_role)
+
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Tous les jours à 03:17 UTC (minutes décalées pour éviter les pics
+    # de charge des cron "pile" de GitHub).
+    - cron: "17 3 * * *"
+  # Permet aussi de déclencher le workflow manuellement depuis l'onglet Actions.
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          http_code=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            --max-time 30 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/")
+
+          echo "HTTP ${http_code} reçu de ${SUPABASE_URL}/rest/v1/"
+
+          # 2xx  = API joignable, clé valide → le projet est actif.
+          # 401  = clé invalide → à corriger dans les secrets.
+          # 5xx / code exotique (ex: 540) = projet probablement en pause.
+          # Tout échec rend le run rouge → email de GitHub → alerte gratuite.
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Supabase est actif."
+          else
+            echo "❌ Réponse inattendue — vérifier les secrets ou l'état du projet."
+            cat /tmp/response.json || true
+            exit 1
+          fi
