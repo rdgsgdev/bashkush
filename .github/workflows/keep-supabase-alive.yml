@@ -29,6 +29,25 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
+
+          # Nettoyage des copier-coller : espaces / retours à la ligne parasites.
+          SUPABASE_URL="$(printf '%s' "${SUPABASE_URL}" | tr -d '[:space:]' | sed 's:/*$::')"
+          SUPABASE_ANON_KEY="$(printf '%s' "${SUPABASE_ANON_KEY}" | tr -d '[:space:]')"
+          export SUPABASE_URL SUPABASE_ANON_KEY
+
+          # Garde-fou : message explicite si un secret est introuvable ou vide.
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "❌ Secret manquant ou vide :"
+            [ -z "${SUPABASE_URL}" ] && echo "   - SUPABASE_URL (attendu : https://xxxxxxxx.supabase.co)"
+            [ -z "${SUPABASE_ANON_KEY}" ] && echo "   - SUPABASE_ANON_KEY (attendu : la clé anon)"
+            echo ""
+            echo "   Vérifier dans Settings → Secrets and variables → Actions →"
+            echo "   Repository secrets (pas Variables, pas Environments), sur ce repo,"
+            echo "   avec ces noms EXACTS. Les secrets vides ou renommés donnent"
+            echo "   exactement l'erreur curl 'No host part in the URL'."
+            exit 1
+          fi
+
           http_code=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
             --max-time 30 \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
