@@ -210,7 +210,7 @@ export function MealsPage() {
           />
         )}
 
-        <main className="flex-1 space-y-3 p-4">
+        <main className="flex-1 space-y-3 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
           {isLoading ? (
             <FullScreenLoader />
           ) : isError && !meals ? (
@@ -244,6 +244,7 @@ export function MealsPage() {
                   key={meal.id}
                   meal={meal}
                   layout="list"
+                  selected={detailsParam === meal.id}
                   onClick={() => setParams({ details: meal.id })}
                 />
               ))}

@@ -13,6 +13,9 @@ interface FavoriteButtonProps {
 export function FavoriteButton({ mealId, isFavorite, className, size = 'md' }: FavoriteButtonProps) {
   const toggle = useToggleFavorite();
   const [optimistic, setOptimistic] = useState(isFavorite);
+  // Incrémenté à chaque clic : re-monte le cœur pour rejouer l'animation
+  // « spring » (pas d'animation au premier rendu).
+  const [pop, setPop] = useState(0);
 
   // Synchronise l'état optimiste quand la prop change.
   if (isFavorite !== optimistic && !toggle.isPending) {
@@ -28,6 +31,7 @@ export function FavoriteButton({ mealId, isFavorite, className, size = 'md' }: F
         e.stopPropagation();
         e.preventDefault();
         setOptimistic(!optimistic);
+        setPop((p) => p + 1);
         toggle.mutate(mealId);
       }}
       className={cn(
@@ -37,9 +41,11 @@ export function FavoriteButton({ mealId, isFavorite, className, size = 'md' }: F
       aria-label={optimistic ? 'Retirer des favoris' : 'Ajouter aux favoris'}
     >
       <Heart
+        key={pop}
         className={cn(
           sizes[size],
           optimistic ? 'fill-rose-500 text-rose-500' : 'fill-none text-stone-400',
+          pop > 0 && 'heart-pop',
         )}
       />
     </button>
