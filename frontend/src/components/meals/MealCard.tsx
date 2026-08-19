@@ -77,7 +77,11 @@ export function MealCard({ meal, onClick, layout = 'list', showFavorite = true, 
   return (
     <button
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]"
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]',
+        // Desktop : la carte ouverte dans le side panel reste marquée.
+        selected && 'lg:ring-2 lg:ring-inset lg:ring-brand-500',
+      )}
     >
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl">
         <MealImage meal={meal} className="h-full w-full" />

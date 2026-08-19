@@ -30,9 +30,16 @@
 }
 
 @layer components {
-  /* Conteneur mobile-first centré (max 480px) */
+  /* Conteneur mobile-first centré (max 480px) ; plein écran sur desktop :
+     le layout passe en menu latéral + contenu + side panel (cf. AppShell). */
   .app-container {
     @apply mx-auto min-h-screen max-w-app bg-stone-50 shadow-soft;
+  }
+  @media (min-width: 1024px) {
+    .app-container {
+      max-width: none;
+      box-shadow: none;
+    }
   }
 
   /* Bouton primaire */
@@ -68,6 +75,31 @@
 .scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ── Cœur favori : petit rebond « spring » au clic ──────────── */
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.heart-pop {
+  animation: heart-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heart-pop {
+    animation: none;
+  }
 }
 
 /* ── Drag & drop liste de courses ───────────────────────────── */

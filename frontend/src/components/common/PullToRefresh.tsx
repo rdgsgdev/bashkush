@@ -71,6 +71,9 @@ export function PullToRefresh({ queryKeys, children }: PullToRefreshProps) {
 
   const onTouchStart = (e: TouchEvent<HTMLDivElement>) => {
     if (refreshing || e.touches.length !== 1) return;
+    // Desktop (≥ 1024px) : le scroll vit dans la colonne centrale et le geste
+    // n'a pas de sens (faux déclenchements sur écrans tactiles) → on ignore.
+    if (window.matchMedia('(min-width: 1024px)').matches) return;
     // Une nouvelle traction interrompt l'animation de retour en cours.
     if (settling) {
       window.clearTimeout(settleTimer.current);

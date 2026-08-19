@@ -10,7 +10,6 @@ import {
   HeartPulse,
   RefreshCw,
   Ruler,
-  Save,
   StickyNote,
   Target,
   User,
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Header } from '../components/layout/Header';
-import { Button } from '../components/ui/Button';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
 import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onboarding/Choice';
 import { FamilyMembers, FamilyInvite } from '../components/profile/FamilySection';
@@ -100,6 +98,8 @@ export function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false); // image absente du cache offline
+  // Modification non encore sauvegardée (déclenche la sauvegarde auto différée).
+  const dirtyRef = useRef(false);
 
   // Charge le profil dans le brouillon une fois disponible.
   useEffect(() => {
@@ -132,6 +132,7 @@ export function ProfilePage() {
   }, [profile, initialized]);
 
   const set = (patch: Partial<ProfileDraft>) => {
+    dirtyRef.current = true;
     setDraft((d) => ({ ...d, ...patch }));
     setSaved(false);
   };
@@ -175,6 +176,18 @@ export function ProfilePage() {
     saveProfile.mutate(cleaned, { onSuccess: onSaveSuccess, onError: onSaveError });
   };
 
+  // Sauvegarde automatique, comme dans les Paramètres : chaque modification
+  // est enregistrée peu après la dernière frappe (les changements rapides
+  // successifs ne déclenchent qu'un seul envoi) — plus de bouton Enregistrer.
+  useEffect(() => {
+    if (!initialized || !dirtyRef.current) return;
+    const t = window.setTimeout(() => {
+      dirtyRef.current = false;
+      handleSave();
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [draft, initialized]);
+
   /** Écrase les valeurs manuelles : recalcul depuis les infos du profil. */
   const handleSync = () => {
     setError(null);
@@ -216,7 +229,7 @@ export function ProfilePage() {
     <div className="flex flex-1 flex-col">
       <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
 
-      <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6">
+      <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6 lg:mx-auto lg:w-full lg:max-w-3xl">
         {/* Objectifs quotidiens — éditables, icône ↻ pour recalculer
             (toujours visibles, pas de carte repliable) */}
         <section className="card bg-brand-500 text-white">
@@ -283,8 +296,8 @@ export function ProfilePage() {
             </>
           ) : (
             <p className="mt-2 text-sm text-white/85">
-              Renseigne ta taille, ton poids, ta date de naissance et ton niveau d’activité puis
-              enregistre pour obtenir tes objectifs caloriques et protéiques.
+              Renseigne ta taille, ton poids, ta date de naissance et ton niveau d’activité : les
+              objectifs se calculent automatiquement.
             </p>
           )}
           <p className="mt-3 text-[11px] text-white/70">
@@ -560,15 +573,6 @@ export function ProfilePage() {
           </div>
         )}
       </main>
-
-      {/* Barre d'action fixe en bas (même pattern que les footers de modales) —
-          reste visible pendant le défilement. */}
-      <footer className="sticky bottom-0 z-30 border-t border-stone-200 bg-white px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
-        <Button onClick={handleSave} loading={saveProfile.isPending} className="w-full">
-          <Save className="h-4 w-4" />
-          Enregistrer
-        </Button>
-      </footer>
     </div>
   );
 }

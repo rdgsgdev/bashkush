@@ -22,7 +22,7 @@ export function Header({ title, subtitle, logo, action, showBurger = true }: Hea
       {showBurger && (
         <button
           onClick={openBurger}
-          className="rounded-lg p-1.5 text-stone-600 transition hover:bg-stone-100"
+          className="rounded-lg p-1.5 text-stone-600 transition hover:bg-stone-100 lg:hidden"
           aria-label="Ouvrir le menu"
         >
           <Menu className="h-6 w-6" />

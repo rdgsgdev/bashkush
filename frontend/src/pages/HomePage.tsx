@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedb
 import { useGrocery, useToggleCheck } from '../api/grocery';
 import { useMealPlans } from '../api/mealPlans';
 import { todayValue, parseDate, formatShortDate, aisleColor, cn } from '../lib/utils';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 import { AISLE_LABELS, STATUS_LABELS } from '../types';
 import { useOptionLabel } from '../hooks/useOptionList';
 import type { MealPlan, MealPlanStatus } from '../types';
@@ -78,6 +79,7 @@ function PlanRow({ plan, onOpen }: { plan: MealPlan; onOpen: (plan: MealPlan) =>
 
 export function HomePage() {
   const navigate = useNavigate();
+  const isDesktop = useIsDesktop();
   const grocery = useGrocery(false);
   const toggleCheck = useToggleCheck();
   const plansQuery = useMealPlans();
@@ -100,7 +102,16 @@ export function HomePage() {
   const selectedPlan = plansQuery.data?.find((p) => p.id === selectedPlanId) ?? null;
   const pendingItems = (grocery.data?.items ?? []).filter((it) => !it.checked).slice(0, 6);
 
-  const openPlan = (plan: MealPlan) => setSelectedPlanId(plan.id);
+  const openPlan = (plan: MealPlan) => {
+    // Desktop : le clic mène à la page calendrier (centre) avec les détails
+    // du plan affichés dans le side panel, via le mécanisme `recipe` de la
+    // page calendrier. Mobile : modale Details ouverte sur la homepage.
+    if (isDesktop) {
+      navigate(`/calendar?date=${plan.fromDate.slice(0, 10)}&recipe=${plan.id}`);
+      return;
+    }
+    setSelectedPlanId(plan.id);
+  };
 
   const editPlanning = (planId: string) => {
     const plan = plansQuery.data?.find((p) => p.id === planId);
@@ -110,10 +121,14 @@ export function HomePage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <Header logo="/logo_text_green.svg" />
+      {/* Desktop : titre « Accueil » ; mobile : logo inline. */}
+      <Header
+        title={isDesktop ? 'Accueil' : undefined}
+        logo={isDesktop ? undefined : '/logo_text_green.svg'}
+      />
 
       <PullToRefresh queryKeys={[['mealPlans'], ['grocery'], ['meals']]}>
-        <main className="flex-1 space-y-6 p-4">
+        <main className="flex-1 space-y-6 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
           {/* Plats planifiés — à préparer (en cours d'abord, puis à faire) */}
           <section>
             <div className="mb-2 flex items-center justify-between">

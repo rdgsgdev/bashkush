@@ -78,7 +78,7 @@ export function CalendarPage() {
       />
 
       <PullToRefresh queryKeys={[['mealPlans']]}>
-        <main className="flex-1 space-y-5 p-4">
+        <main className="flex-1 space-y-5 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
           <Calendar
             activeDate={activeDate}
             onSelectDate={setDate}
