@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, RotateCcw, SearchX, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
@@ -12,6 +12,8 @@ import { MealAIGenerationModal } from '../components/modals/MealAIGenerationModa
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useMeals } from '../api/meals';
+import { loadAiMealSession, clearAiMealSession } from '../lib/aiMealSession';
+import { useAuthStore } from '../store/authStore';
 import { Difficulty } from '../types';
 
 /** Minuscules sans accents, pour une recherche insensible aux diacritiques. */
@@ -25,6 +27,51 @@ function normalizeText(value: string) {
 export function MealsPage() {
   const [params, setParams] = useSearchParams();
   const { data: meals, isLoading, isError } = useMeals();
+  const userId = useAuthStore((s) => s.user?.id);
+
+  // Reprise d'une session IA active (génération en cours ou plat non
+  // enregistré) : la modale se réouvre automatiquement à l'arrivée sur la
+  // page, dans l'état laissé au départ. Une seule tentative par montage.
+  const aiRestoreDoneRef = useRef(false);
+  useEffect(() => {
+    if (aiRestoreDoneRef.current || !userId) return;
+    let cancelled = false;
+    void loadAiMealSession(userId)
+      .then((session) => {
+        if (cancelled || aiRestoreDoneRef.current || !session) return;
+        // Session d'édition d'un plat supprimé depuis → on l'efface.
+        if (session.mode === 'edit') {
+          if (!meals) return; // attendre le chargement des plats
+          if (!session.mealId || !meals.some((m) => m.id === session.mealId)) {
+            aiRestoreDoneRef.current = true;
+            void clearAiMealSession(userId).catch(() => undefined);
+            return;
+          }
+        }
+        // Une autre modale est déjà ouverte via l'URL → on ne touche à rien.
+        const otherModal =
+          params.get('editchoice') || params.get('details') || params.get('plan') ||
+          (params.get('meal') && params.get('meal') !== 'ai');
+        if (otherModal) {
+          aiRestoreDoneRef.current = true;
+          return;
+        }
+        // Modale IA déjà ouverte par l'URL → rien à faire non plus.
+        if (params.get('meal') === 'ai' || params.get('mealai')) {
+          aiRestoreDoneRef.current = true;
+          return;
+        }
+        aiRestoreDoneRef.current = true;
+        const next = new URLSearchParams(params);
+        if (session.mode === 'edit' && session.mealId) next.set('mealai', session.mealId);
+        else next.set('meal', 'ai');
+        setParams(next, { replace: true });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, meals, params, setParams]);
 
   // Filtres/tri de la liste (état local, remis à zéro en quittant la page).
   const [search, setSearch] = useState('');

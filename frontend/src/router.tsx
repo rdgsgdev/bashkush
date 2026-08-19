@@ -1,5 +1,5 @@
-import { ReactNode } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { ReactNode, useEffect } from 'react';
+import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
 import { MealsPage } from './pages/MealsPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -11,6 +11,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { AppShell } from './components/layout/AppShell';
 import { useAuthStore } from './store/authStore';
 import { useProfile } from './api/profile';
+import { loadAiMealSession } from './lib/aiMealSession';
 import type { Profile } from './types/profile';
 
 function FullscreenLoader() {
@@ -19,6 +20,45 @@ function FullscreenLoader() {
       <p className="text-sm font-semibold text-brand-700">Chargement…</p>
     </div>
   );
+}
+
+/**
+ * Reprise d'une génération IA en cours au chargement de l'app : redirection
+ * directe vers « Mes plats » avec la modale ouverte — même comportement que
+ * si l'app n'avait jamais été quittée. Ne fait rien sinon.
+ */
+function AiSessionResumeGate() {
+  const user = useAuthStore((s) => s.user);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    void loadAiMealSession(user.id)
+      .then((session) => {
+        if (cancelled || !session?.activeJob) return;
+        // Une modale est déjà demandée par l'URL → on ne la remplace pas.
+        const search = new URLSearchParams(location.search);
+        const modalAlreadyOpen = ['meal', 'editchoice', 'mealai', 'details', 'plan'].some(
+          (key) => search.get(key),
+        );
+        if (modalAlreadyOpen) return;
+        const target =
+          session.mode === 'edit' && session.mealId
+            ? `?mealai=${encodeURIComponent(session.mealId)}`
+            : '?meal=ai';
+        navigate(`/meals${target}`, { replace: true });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // Une seule tentative par chargement de l'app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  return null;
 }
 
 /** Vrai si l'onboarding est terminé (profil existant avec onboardedAt). */
@@ -40,6 +80,7 @@ function ProtectedLayout() {
 
   return (
     <AppShell>
+      <AiSessionResumeGate />
       <Outlet />
     </AppShell>
   );

@@ -179,6 +179,21 @@ CREATE TABLE "family_members" (
     CONSTRAINT "family_members_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ai_meal_jobs" (
+    "id" TEXT NOT NULL,
+    "family_id" TEXT NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'running',
+    "result" JSONB,
+    "error" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ai_meal_jobs_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "ingredients_aisle_idx" ON "ingredients"("aisle");
 
@@ -211,6 +226,9 @@ CREATE UNIQUE INDEX "list_options_family_id_list_key_value_key" ON "list_options
 
 -- CreateIndex
 CREATE INDEX "list_options_family_id_list_key_idx" ON "list_options"("family_id", "list_key");
+
+-- CreateIndex
+CREATE INDEX "ai_meal_jobs_family_id_created_at_idx" ON "ai_meal_jobs"("family_id", "created_at");
 
 -- AddForeignKey
 ALTER TABLE "list_options" ADD CONSTRAINT "list_options_family_id_fkey" FOREIGN KEY ("family_id") REFERENCES "families"("id") ON DELETE CASCADE ON UPDATE CASCADE;

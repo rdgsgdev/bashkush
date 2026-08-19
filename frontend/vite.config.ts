@@ -41,7 +41,7 @@ export default defineConfig({
         // Les icônes PWA (pwa-*.png, référencées dans le manifeste) sont
         // précachées automatiquement par le plugin — ne pas les lister ici
         // (doublons dans le manifeste de précache sinon).
-        globPatterns: ['**/*.{js,css,html,svg,woff2}', 'logo-inline.png', 'logo-menu.png'],
+        globPatterns: ['**/*.{js,css,html,svg,woff2}', 'apple-touch-icon.png', 'logo-menu.png'],
         navigateFallback: 'index.html',
         runtimeCaching: [
           {

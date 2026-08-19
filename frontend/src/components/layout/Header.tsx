@@ -30,7 +30,7 @@ export function Header({ title, subtitle, logo, action, showBurger = true }: Hea
       )}
       <div className="min-w-0 flex-1">
         {logo ? (
-          <img src={logo} alt="Bashkush" className="h-8 w-auto" />
+          <img src={logo} alt="Bashkush" className="h-6 w-auto" />
         ) : (
           <>
             <h1 className="truncate text-lg font-bold leading-tight text-stone-800">{title}</h1>

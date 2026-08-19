@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Plus, Save, Send, Sparkles, X } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -6,9 +6,16 @@ import { Field, Input, Select, Textarea } from '../ui/FormControl';
 import { NumberStepper } from '../ui/NumberStepper';
 import { MealDetailsContent } from '../meals/MealDetailsContent';
 import { useFamilyMembers } from '../../api/family';
-import { useGenerateMeal, GenerateMealPayload } from '../../api/ai';
+import { startMealJob, useMealJob, GenerateMealPayload } from '../../api/ai';
 import { useCreateMeal, useUpdateMeal } from '../../api/meals';
 import { getApiErrorMessage } from '../../api/client';
+import { useAuthStore } from '../../store/authStore';
+import {
+  loadAiMealSession,
+  saveAiMealSession,
+  clearAiMealSession,
+  type ChatMessage,
+} from '../../lib/aiMealSession';
 import { useOptionList } from '../../hooks/useOptionList';
 import { DIFFICULTY_OPTIONS } from '../../lib/options';
 import type { Meal, MealDraft, Difficulty } from '../../types';
@@ -20,11 +27,6 @@ interface MealAIGenerationModalProps {
   onClose: () => void;
   /** Plat existant à modifier par IA (absent = création). */
   meal?: Meal | null;
-}
-
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  text: string;
 }
 
 /** Convertit un plat persisté en brouillon exploitable par l'IA / le PUT. */
@@ -53,6 +55,31 @@ const memberInfo = (m: FamilyMemberProfileView) => {
   if (m.allergies?.trim()) parts.push(`Allergies : ${m.allergies.trim()}`);
   return parts.length ? parts.join(' · ') : 'Profil nutritionnel incomplet';
 };
+
+/** Copie dans le presse-papier, avec repli execCommand pour les vieux navigateurs. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // On tente le repli ci-dessous.
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 /** Cartes de sélection des membres (formulaire de génération + édition IA). */
 function MemberPicker({
@@ -120,13 +147,17 @@ function MemberPicker({
  * - modification (`meal` fourni) : le plat existant est affiché d'emblée,
  *   le chat décrit les modifications à appliquer, puis « Enregistrer les
  *   modifications » remplace le plat via PUT.
+ *
+ * La génération tourne côté serveur (job) : fermer la modale ou quitter
+ * l'app ne l'interrompt pas — la session est persistée en IndexedDB et
+ * restaurée à la réouverture (même état que si l'on était resté).
  */
 export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationModalProps) {
   const isEdit = Boolean(meal);
   const { data: members, isLoading: membersLoading } = useFamilyMembers();
-  const generate = useGenerateMeal();
   const createMeal = useCreateMeal();
   const updateMeal = useUpdateMeal();
+  const userId = useAuthStore((s) => s.user?.id);
   // Catégories paramétrables de la famille (l'IA les respecte).
   const { options: categoryOptions } = useOptionList('category');
 
@@ -146,9 +177,19 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Réinitialise tout à chaque ouverture (en édition : plat courant affiché).
+  // Job de génération en cours (côté serveur) + hydratation de session.
+  const [activeJob, setActiveJob] = useState<{ id: string; kind: 'generate' | 'feedback' } | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  // Vrai après une fermeture volontaire sans job en cours : la session
+  // est effacée et ne doit pas être réécrite par l'effet de persistance.
+  const discardedRef = useRef(false);
+
+  // À l'ouverture : état par défaut, puis restauration de la session
+  // persistée si elle correspond au même mode / même plat.
   useEffect(() => {
     if (!open) return;
+    discardedRef.current = false;
+    setHydrated(false);
     setSelectedIds(new Set());
     setServings(meal?.servings ?? 2);
     setDifficulty('');
@@ -170,21 +211,104 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
     );
     setFeedback('');
     setError(null);
-    generate.reset();
+    setActiveJob(null);
+
+    let cancelled = false;
+    if (!userId) {
+      setHydrated(true);
+    } else {
+      loadAiMealSession(userId)
+        .then((session) => {
+          if (cancelled) return;
+          const sameTarget =
+            session &&
+            session.mode === (meal ? 'edit' : 'create') &&
+            session.mealId === (meal?.id ?? undefined);
+          if (session && sameTarget) {
+            setSelectedIds(new Set(session.form.selectedIds));
+            setServings(session.form.servings);
+            setDifficulty(session.form.difficulty as '' | Difficulty);
+            setCategory(session.form.category);
+            setDesiredIngredients(session.form.desiredIngredients);
+            setDescription(session.form.description);
+            setGenerated(session.generated ?? (meal ? mealToDraft(meal) : null));
+            setViewServings(session.viewServings);
+            setChat(session.chat);
+            setActiveJob(session.activeJob);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setHydrated(true);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, meal?.id]);
 
-  // Par défaut : moi seul(e) sélectionné(e).
+  // Par défaut : moi seul(e) sélectionné(e) (jamais après restauration
+  // d'une session — le choix persisté prime, même vide).
   useEffect(() => {
-    if (!open || !members || selectedIds.size > 0) return;
+    if (!open || !members || hydrated || selectedIds.size > 0) return;
     setSelectedIds(new Set(members.filter((m) => m.isSelf).map((m) => m.userId)));
-  }, [open, members, selectedIds.size]);
+  }, [open, members, hydrated, selectedIds.size]);
 
-  const toggleMember = (userId: string) => {
+  // Persistance continue : la session survit à la fermeture de l'app.
+  // On n'écrit que si quelque chose est en jeu (job en cours ou chat
+  // entamé) — un simple formulaire jamais lancé n'est pas conservé.
+  useEffect(() => {
+    if (!hydrated || !userId || discardedRef.current) return;
+    if (activeJob === null && !chat.some((m) => m.role === 'user')) return;
+    void saveAiMealSession(userId, {
+      mode: isEdit ? 'edit' : 'create',
+      mealId: isEdit && meal ? meal.id : undefined,
+      form: {
+        selectedIds: [...selectedIds],
+        servings,
+        difficulty,
+        category,
+        desiredIngredients,
+        description,
+      },
+      generated,
+      viewServings,
+      chat,
+      activeJob,
+    }).catch(() => undefined);
+  }, [
+    hydrated, userId, activeJob, chat, generated, viewServings,
+    selectedIds, servings, difficulty, category, desiredIngredients, description,
+    isEdit, meal,
+  ]);
+
+  // ── Suivi du job serveur (polling) ────────────────────────
+  const mealJob = useMealJob(activeJob?.id ?? null);
+  const jobData = mealJob.data;
+
+  useEffect(() => {
+    if (!activeJob || !jobData || jobData.status === 'running') return;
+    if (jobData.status === 'done' && jobData.meal) {
+      setGenerated(jobData.meal);
+      setViewServings(jobData.meal.servings ?? servings);
+      if (activeJob.kind === 'feedback') {
+        setChat((prev) => [
+          ...prev,
+          { role: 'assistant', text: isEdit ? 'Plat modifié en tenant compte de ta demande.' : 'Plat régénéré en tenant compte de ta demande.' },
+        ]);
+      }
+    } else {
+      setError(jobData.error ?? 'La génération a échoué, réessaie');
+    }
+    setActiveJob(null);
+  }, [activeJob, jobData, isEdit, servings]);
+
+  const toggleMember = (memberUserId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
+      if (next.has(memberUserId)) next.delete(memberUserId);
+      else next.add(memberUserId);
       return next;
     });
   };
@@ -215,9 +339,8 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
     }
     setError(null);
     try {
-      const result = await generate.mutateAsync(buildPayload());
-      setGenerated(result);
-      setViewServings(result.servings ?? servings);
+      const jobId = await startMealJob(buildPayload());
+      setActiveJob({ id: jobId, kind: 'generate' });
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -225,7 +348,7 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
 
   const handleSendFeedback = async () => {
     const text = feedback.trim();
-    if (!text || !generated || generate.isPending) return;
+    if (!text || !generated || activeJob) return;
     if (selectedIds.size === 0) {
       setError('Sélectionne au moins un membre');
       return;
@@ -237,13 +360,8 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
       const payload: GenerateMealPayload = isEdit
         ? { memberIds: [...selectedIds], servings: meal!.servings, previousMeal: generated, feedback: text }
         : { ...buildPayload(), previousMeal: generated, feedback: text };
-      const result = await generate.mutateAsync(payload);
-      setGenerated(result);
-      setViewServings(result.servings ?? servings);
-      setChat((prev) => [
-        ...prev,
-        { role: 'assistant', text: isEdit ? 'Plat modifié en tenant compte de ta demande.' : 'Plat régénéré en tenant compte de ta demande.' },
-      ]);
+      const jobId = await startMealJob(payload);
+      setActiveJob({ id: jobId, kind: 'feedback' });
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -259,10 +377,41 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
       } else {
         await createMeal.mutateAsync({ ...generated, id: undefined });
       }
+      // Plat enregistré : la session n'a plus raison d'être.
+      if (userId) {
+        discardedRef.current = true;
+        void clearAiMealSession(userId).catch(() => undefined);
+      }
       onClose();
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
+  };
+
+  /**
+   * Fermeture volontaire : si un job tourne, la session est conservée
+   * (la génération continue, reprise au retour) ; sinon on repart de
+   * zéro à la prochaine ouverture.
+   */
+  const handleClose = () => {
+    if (activeJob === null && userId) {
+      discardedRef.current = true;
+      void clearAiMealSession(userId).catch(() => undefined);
+    }
+    onClose();
+  };
+
+  // ── Copie d'une bulle du chat (clic) ──────────────────────
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const copyTimerRef = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(copyTimerRef.current), []);
+
+  const handleCopyBubble = async (text: string, index: number) => {
+    const ok = await copyText(text);
+    if (!ok) return;
+    setCopiedIndex(index);
+    window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopiedIndex(null), 1500);
   };
 
   // ── Rendu ─────────────────────────────────────────────────
@@ -271,15 +420,17 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
     <div className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-600">{error}</div>
   );
 
+  const pending = activeJob !== null;
+
   /** En édition, le plat existe d'emblée : phase résultat directe. */
-  const showResult = isEdit || Boolean(generated) || generate.isPending;
+  const showResult = isEdit || Boolean(generated) || pending;
   const saving = createMeal.isPending || updateMeal.isPending;
 
   // ── Phase 1 : formulaire (création) ───────────────────────
   const formFooter = (
     <div className="flex items-center justify-end gap-2">
-      <Button variant="secondary" onClick={onClose}>Annuler</Button>
-      <Button onClick={handleGenerate} loading={generate.isPending}>
+      <Button variant="secondary" onClick={handleClose}>Annuler</Button>
+      <Button onClick={handleGenerate} loading={pending}>
         <Sparkles className="h-4 w-4" /> Générer
       </Button>
     </div>
@@ -389,17 +540,25 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
       {chat.length > 0 && (
         <div className="max-h-24 space-y-1.5 overflow-y-auto">
           {chat.map((msg, i) => (
-            <p
+            <button
               key={i}
+              type="button"
+              onClick={() => handleCopyBubble(msg.text, i)}
+              title="Copier le message"
+              aria-label="Copier le message"
               className={cn(
-                'w-fit max-w-[85%] rounded-xl px-2.5 py-1.5 text-xs leading-relaxed',
+                'flex w-fit max-w-[85%] items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-left text-xs leading-relaxed transition',
                 msg.role === 'user'
                   ? 'ml-auto bg-brand-500 text-white'
                   : 'bg-stone-100 text-stone-600',
+                copiedIndex === i && 'ring-2 ring-brand-300',
               )}
             >
-              {msg.text}
-            </p>
+              <span>{msg.text}</span>
+              {copiedIndex === i ? (
+                <Check className="h-3 w-3 shrink-0" aria-label="Copié" />
+              ) : null}
+            </button>
           ))}
         </div>
       )}
@@ -414,13 +573,13 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
             }
           }}
           placeholder={isEdit ? 'Ex : remplacer la crème par du lait de coco…' : 'Ex : plus de protéines, sans lactose…'}
-          disabled={generate.isPending}
+          disabled={pending}
           maxLength={1000}
         />
         <Button
           variant="secondary"
           onClick={handleSendFeedback}
-          loading={generate.isPending}
+          loading={pending}
           disabled={!feedback.trim()}
           aria-label="Envoyer la consigne"
         >
@@ -433,16 +592,18 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
     </div>
   );
 
-  const resultBody = !isEdit && generate.isPending && !generated ? (
+  const resultBody = !isEdit && pending && !generated ? (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
       <Sparkles className="h-8 w-8 animate-pulse text-brand-500" />
       <p className="text-sm font-semibold text-stone-700">Génération du plat en cours…</p>
-      <p className="text-xs text-stone-400">Cela peut prendre une trentaine de secondes.</p>
+      <p className="text-xs text-stone-400">
+        Tu peux quitter l'app : la génération continue et se retrouvera ici.
+      </p>
     </div>
   ) : generated ? (
     <div className="space-y-4">
       {errorBanner}
-      {generate.isPending && (
+      {pending && (
         <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
           <Sparkles className="h-4 w-4 animate-pulse" /> {isEdit ? 'Modification du plat en cours…' : 'Régénération en cours…'}
         </div>
@@ -467,7 +628,7 @@ export function MealAIGenerationModal({ open, onClose, meal }: MealAIGenerationM
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={isEdit ? 'Modifier avec l’IA' : generated ? 'Plat généré' : 'Générer avec IA'}
       footer={showResult ? resultFooter : formFooter}
     >

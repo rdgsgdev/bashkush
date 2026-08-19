@@ -272,3 +272,22 @@ model GroceryAisle {
 
   @@map("grocery_aisles")
 }
+
+// Job de génération de plat par IA : la génération continue côté
+// serveur même si le client ferme la modale / quitte l'app ; il
+// récupère le résultat en interrogeant le job. Table éphémère
+// (purge après 24 h), sans relation Prisma vers Family.
+model AiMealJob {
+  id        String   @id @default(uuid())
+  familyId  String   @map("family_id")
+  userId    String   @map("user_id")
+  payload   Json // requête validée (génération ou modification via chat)
+  status    String   @default("running") // running | done | error
+  result    Json? // plat généré (CreateMealInput normalisé)
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([familyId, createdAt])
+  @@map("ai_meal_jobs")
+}

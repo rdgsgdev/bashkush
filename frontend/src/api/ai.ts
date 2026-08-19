@@ -1,6 +1,6 @@
-// ── Génération de plats par IA (POST /ai/generate-meal) ──────
+// ── Génération de plats par IA (jobs /ai/meal-jobs) ──────────
 
-import { useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
 import type { Difficulty, MealDraft, Nutrition } from '../types';
 
@@ -19,19 +19,41 @@ export interface GenerateMealPayload {
   feedback?: string;
 }
 
-/**
- * Appelle l'IA : la génération peut prendre du temps, on dépasse
- * le timeout axios par défaut (15 s) pour cette requête uniquement.
- */
-export async function generateMeal(payload: GenerateMealPayload): Promise<MealDraft> {
-  const { data } = await api.post<{ meal: MealDraft }>('/ai/generate-meal', payload, {
-    timeout: 120_000,
-  });
-  return data.meal;
+/** État d'un job de génération côté serveur. */
+export interface MealJob {
+  id: string;
+  status: 'running' | 'done' | 'error';
+  /** Plat généré (status === 'done'). */
+  meal?: MealDraft;
+  /** Message d'erreur lisible (status === 'error'). */
+  error?: string;
 }
 
-export function useGenerateMeal() {
-  return useMutation({ mutationFn: generateMeal });
+/**
+ * Lance une génération en tâche de fond : le serveur traite même si
+ * l'app est fermée, on récupère le résultat en interrogeant le job.
+ */
+export async function startMealJob(payload: GenerateMealPayload): Promise<string> {
+  const { data } = await api.post<{ job: { id: string } }>('/ai/meal-jobs', payload);
+  return data.job.id;
+}
+
+/** Interroge l'état d'un job (polling toutes les 3 s tant qu'il tourne). */
+export async function fetchMealJob(id: string): Promise<MealJob> {
+  const { data } = await api.get<{ job: MealJob }>(`/ai/meal-jobs/${id}`);
+  return data.job;
+}
+
+export function useMealJob(jobId: string | null) {
+  return useQuery({
+    queryKey: ['ai-meal-job', jobId],
+    queryFn: () => fetchMealJob(jobId!),
+    enabled: Boolean(jobId),
+    // Le job peut aboutir pendant qu'on a quitté l'app : jamais de cache.
+    staleTime: 0,
+    gcTime: 0,
+    refetchInterval: (query) => (query.state.data?.status === 'running' ? 3_000 : false),
+  });
 }
 
 // ── Complétion des apports d'un ingrédient (POST /ai/ingredient-nutrition) ──

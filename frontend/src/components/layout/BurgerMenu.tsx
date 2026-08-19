@@ -53,8 +53,8 @@ export function BurgerMenu() {
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={close} />
       <nav className="absolute left-0 top-0 flex h-full w-[78%] max-w-xs flex-col bg-white shadow-soft">
-        <div className="flex h-24 items-center justify-start bg-brand-500">
-          <img src="/logo-menu.png" alt="Bashkush" className="h-full w-auto object-contain" />
+        <div className="flex h-24 items-center justify-center bg-brand-500">
+          <img src="/logo_horizontal_white.svg" alt="Bashkush" className="h-9 w-auto max-w-[85%] object-contain" />
         </div>
         <ul className="flex-1 overflow-y-auto p-3">
           {NAV.map(({ to, label, icon: Icon }) => {

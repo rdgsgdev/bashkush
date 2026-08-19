@@ -109,7 +109,7 @@ export function HomePage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <Header logo="/logo-inline.png" />
+      <Header logo="/logo_text_green.svg" />
 
       <main className="flex-1 space-y-6 p-4">
         {/* Plats planifiés — à préparer (en cours d'abord, puis à faire) */}

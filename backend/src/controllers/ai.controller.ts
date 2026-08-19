@@ -1,7 +1,10 @@
 // ── Génération de plats par IA (Perplexity Sonar) ────────────
-// Le plat généré n'est PAS persisté ici : il est renvoyé au
-// frontend (format CreateMealInput) qui l'affiche et ne l'enregistre
-// que si l'utilisateur le valide (bouton « Enregistrer »).
+// Le plat généré n'est PAS persisté comme « plat » ici : il est
+// renvoyé au frontend (format CreateMealInput) qui l'affiche et ne
+// l'enregistre que si l'utilisateur le valide (bouton « Enregistrer »).
+// Exception : les jobs (/ai/meal-jobs) stockent temporairement le
+// résultat (24 h max) pour que la génération survive à la fermeture
+// de l'app — jamais converti en plat sans validation explicite.
 
 import { z } from 'zod';
 import type { Profile } from '@prisma/client';
@@ -415,12 +418,24 @@ function normalizeMeal(
 
 // ── Contrôleur ───────────────────────────────────────────────
 
-/** POST /api/ai/generate-meal — génère (ou régénère) un plat adapté aux profils sélectionnés. */
-export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Response) => {
-  const request = generateMealRequestSchema.parse(req.body) as GenerateMealRequest;
+/** Contexte validé d'une génération (réglages, listes, profils). */
+interface MealGenerationContext {
+  request: GenerateMealRequest;
+  safeCategories: { value: string; label: string }[];
+  unitValues: string[];
+  aisleNames: string[];
+  profiles: Profile[];
+}
 
-  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
-
+/**
+ * Validation rapide d'une demande de génération : réglage IA de la
+ * famille, listes paramétrables, catégorie et membres. Commune à
+ * l'endpoint synchrone et aux jobs — lève HttpError en cas de refus.
+ */
+async function loadGenerationContext(
+  request: GenerateMealRequest,
+  familyId: string,
+): Promise<MealGenerationContext> {
   // Réglage IA de la famille : la génération peut être désactivée (Paramètres).
   const settings = await getFamilySettings(familyId);
   if (!settings.aiMealGenerationEnabled) {
@@ -450,6 +465,13 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
   });
   if (profiles.length === 0) throw new HttpError(404, 'Aucun membre valide sélectionné');
 
+  return { request, safeCategories, unitValues, aisleNames, profiles };
+}
+
+/** Appel IA + validation de la réponse + normalisation en CreateMealInput. */
+async function generateWithAi(ctx: MealGenerationContext): Promise<CreateMealInput> {
+  const { request, safeCategories, unitValues, aisleNames, profiles } = ctx;
+
   const meal = await perplexityChatJSON<unknown>({
     system: buildSystemPrompt(unitValues, aisleNames),
     user: buildUserPrompt(request, profiles, safeCategories),
@@ -464,7 +486,113 @@ export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Respons
     throw new HttpError(502, 'Le plat généré par l’IA est incomplet, réessaie');
   }
 
-  res.json({ meal: normalizeMeal(parsed.data, request.servings, request.previousMeal?.name) });
+  return normalizeMeal(parsed.data, request.servings, request.previousMeal?.name);
+}
+
+/** Validation + génération complètes (endpoint synchrone historique). */
+async function runMealGeneration(request: GenerateMealRequest, familyId: string): Promise<CreateMealInput> {
+  return generateWithAi(await loadGenerationContext(request, familyId));
+}
+
+/** POST /api/ai/generate-meal — génère (ou régénère) un plat adapté aux profils sélectionnés. */
+export const generateMeal = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const request = generateMealRequestSchema.parse(req.body) as GenerateMealRequest;
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+
+  const meal = await runMealGeneration(request, familyId);
+  res.json({ meal });
+});
+
+// ── Jobs de génération (poursuite après fermeture de l'app) ──
+
+/** Job « running » plus ancien : le serveur a redémarré, la génération est perdue. */
+const STALE_JOB_MS = 5 * 60 * 1000;
+/** Purge des jobs obsolètes (le résultat non récupéré n'a plus d'intérêt). */
+const JOB_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Traite un job en arrière-plan : le client peut fermer la modale ou
+ * quitter l'app, la génération continue et le résultat l'attend en base.
+ */
+async function runAiMealJob(jobId: string, ctx: MealGenerationContext): Promise<void> {
+  try {
+    const meal = await generateWithAi(ctx);
+    await prisma.aiMealJob.update({
+      where: { id: jobId },
+      data: { status: 'done', result: JSON.parse(JSON.stringify(meal)) },
+    });
+  } catch (err) {
+    const message = err instanceof HttpError ? err.message : 'La génération a échoué, réessaie';
+    // eslint-disable-next-line no-console
+    console.error('Job de génération IA échoué :', err instanceof Error ? err.message : err);
+    await prisma.aiMealJob
+      .update({ where: { id: jobId }, data: { status: 'error', error: message } })
+      .catch(() => undefined);
+  }
+}
+
+/**
+ * POST /api/ai/meal-jobs — lance une génération en tâche de fond et
+ * répond immédiatement avec l'id du job (polling côté client).
+ */
+export const createMealJob = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const request = generateMealRequestSchema.parse(req.body) as GenerateMealRequest;
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+
+  // Validation immédiate (réglage désactivé, catégorie inconnue, membres
+  // invalides) : le client reçoit l'erreur tout de suite, sans polling.
+  const ctx = await loadGenerationContext(request, familyId);
+
+  // Purge opportuniste des jobs de plus de 24 h.
+  await prisma.aiMealJob.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - JOB_TTL_MS) } },
+  });
+
+  const job = await prisma.aiMealJob.create({
+    data: {
+      familyId,
+      userId: req.authUser!.id,
+      payload: JSON.parse(JSON.stringify(request)),
+      status: 'running',
+    },
+  });
+
+  // Fire-and-forget : la requête HTTP se termine, la génération continue.
+  void runAiMealJob(job.id, ctx);
+
+  res.status(202).json({ job: { id: job.id, status: 'running' } });
+});
+
+/**
+ * GET /api/ai/meal-jobs/:id — état d'un job (running | done | error),
+ * avec le plat généré une fois terminé. Ciblé sur la famille connectée.
+ */
+export const getMealJob = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const { id } = req.params;
+  const familyId = await ensureFamilyId(req.authUser!.id, req.authUser!.email);
+
+  let job = await prisma.aiMealJob.findFirst({ where: { id, familyId } });
+  if (!job) throw new HttpError(404, 'Génération introuvable ou expirée');
+
+  // « running » depuis trop longtemps : le serveur a redémarré entre-temps.
+  if (job.status === 'running' && Date.now() - job.updatedAt.getTime() > STALE_JOB_MS) {
+    const interrupted = await prisma.aiMealJob
+      .update({
+        where: { id: job.id },
+        data: { status: 'error', error: 'Génération interrompue (serveur indisponible), réessaie' },
+      })
+      .catch(() => null);
+    if (interrupted) job = interrupted;
+  }
+
+  res.json({
+    job: {
+      id: job.id,
+      status: job.status,
+      meal: job.status === 'done' ? job.result : undefined,
+      error: job.status === 'error' ? job.error : undefined,
+    },
+  });
 });
 
 // ── Complétion des apports d'un ingrédient (ajout manuel) ────
