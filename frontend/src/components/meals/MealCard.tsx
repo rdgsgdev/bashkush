@@ -39,7 +39,7 @@ export function MealCard({ meal, onClick, layout = 'list', showFavorite = true, 
         data-meal-id={meal.id}
         onClick={onClick}
         className={cn(
-          'group relative w-44 shrink-0 snap-start overflow-hidden rounded-2xl bg-white text-left shadow-card transition',
+          'group relative w-44 shrink-0 overflow-hidden rounded-2xl bg-white text-left shadow-card transition',
           selected && 'ring-2 ring-inset ring-brand-500',
         )}
       >
