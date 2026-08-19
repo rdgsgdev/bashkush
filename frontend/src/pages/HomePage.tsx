@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
+import { PullToRefresh } from '../components/common/PullToRefresh';
 import { MealCarousel } from '../components/meals/MealCarousel';
 import { StoreLogo } from '../components/grocery/StoreLogo';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
@@ -111,120 +112,122 @@ export function HomePage() {
     <div className="flex flex-1 flex-col">
       <Header logo="/logo_text_green.svg" />
 
-      <main className="flex-1 space-y-6 p-4">
-        {/* Plats planifiés — à préparer (en cours d'abord, puis à faire) */}
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
-              <ChefHat className="h-4 w-4 text-brand-500" /> À préparer
-            </h2>
-            <button
-              onClick={() => navigate('/calendar')}
-              className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
-            >
-              Calendrier <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-
-          {plansQuery.isLoading ? (
-            <FullScreenLoader />
-          ) : plansQuery.isError && !plansQuery.data ? (
-            <ErrorState />
-          ) : enPreparation.length === 0 && aFaire.length === 0 ? (
-            <div className="rounded-2xl bg-white p-4 shadow-card">
-              <EmptyState
-                icon={CalendarDays}
-                title="Aucun plat à préparer"
-                description="Planifiez un plat pour le voir apparaître ici."
-              />
+      <PullToRefresh queryKeys={[['mealPlans'], ['grocery'], ['meals']]}>
+        <main className="flex-1 space-y-6 p-4">
+          {/* Plats planifiés — à préparer (en cours d'abord, puis à faire) */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
+                <ChefHat className="h-4 w-4 text-brand-500" /> À préparer
+              </h2>
+              <button
+                onClick={() => navigate('/calendar')}
+                className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
+              >
+                Calendrier <ChevronRight className="h-3 w-3" />
+              </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {enPreparation.map((plan) => (
-                <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
-              ))}
-              {aFaire.map((plan) => (
-                <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
-              ))}
-            </div>
-          )}
-        </section>
 
-        {/* Tous mes plats — carrousel avec raccourci de création en tête */}
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
-              <UtensilsCrossed className="h-4 w-4 text-brand-500" /> Mes plats
-            </h2>
-            <button
-              onClick={() => navigate('/meals')}
-              className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
-            >
-              Tous les plats <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-          <MealCarousel
-            onAdd={() => navigate('/meals?meal=new')}
-            onSelect={(m) => navigate(`/meals?details=${m.id}`)}
-          />
-        </section>
-
-        {/* Aperçu liste de courses — seule la case à cocher marque l'item acheté */}
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
-              <ShoppingCart className="h-4 w-4 text-brand-500" /> À acheter
-            </h2>
-            <button
-              onClick={() => navigate('/grocery')}
-              className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
-            >
-              Liste complète <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-
-          <div className="rounded-2xl bg-white p-2 shadow-card">
-            {grocery.isLoading ? null : grocery.isError && !grocery.data ? (
+            {plansQuery.isLoading ? (
+              <FullScreenLoader />
+            ) : plansQuery.isError && !plansQuery.data ? (
               <ErrorState />
-            ) : pendingItems.length === 0 ? (
-              <EmptyState
-                icon={ShoppingCart}
-                title="Rien à acheter"
-                description="Votre liste de courses est à jour."
-              />
+            ) : enPreparation.length === 0 && aFaire.length === 0 ? (
+              <div className="rounded-2xl bg-white p-4 shadow-card">
+                <EmptyState
+                  icon={CalendarDays}
+                  title="Aucun plat à préparer"
+                  description="Planifiez un plat pour le voir apparaître ici."
+                />
+              </div>
             ) : (
-              <ul className="divide-y divide-stone-100">
-                {pendingItems.map((it) => (
-                  <li key={it.id} className="flex items-center gap-3 px-2 py-2.5">
-                    <button
-                      onClick={() => toggleCheck.mutate(it.id)}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-stone-300 text-transparent transition hover:border-brand-400 active:scale-95"
-                      aria-label={`Marquer ${it.name} comme acheté`}
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">
-                      {it.name}
-                    </span>
-                    <span className="shrink-0 text-xs text-stone-400">
-                      {it.quantity} {it.unit}
-                    </span>
-                    <StoreLogo store={it.store} />
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${aisleColor(it.aisle)}`}
-                    >
-                      {AISLE_LABELS[it.aisle] ?? it.aisle}
-                    </span>
-                  </li>
+              <div className="space-y-3">
+                {enPreparation.map((plan) => (
+                  <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
                 ))}
-              </ul>
+                {aFaire.map((plan) => (
+                  <PlanRow key={plan.id} plan={plan} onOpen={openPlan} />
+                ))}
+              </div>
             )}
-          </div>
-          <p className="mt-1.5 px-1 text-xs text-stone-400">
-            Cochez la case pour marquer un élément comme acheté.
-          </p>
-        </section>
-      </main>
+          </section>
+
+          {/* Tous mes plats — carrousel avec raccourci de création en tête */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
+                <UtensilsCrossed className="h-4 w-4 text-brand-500" /> Mes plats
+              </h2>
+              <button
+                onClick={() => navigate('/meals')}
+                className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
+              >
+                Tous les plats <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
+            <MealCarousel
+              onAdd={() => navigate('/meals?meal=new')}
+              onSelect={(m) => navigate(`/meals?details=${m.id}`)}
+            />
+          </section>
+
+          {/* Aperçu liste de courses — seule la case à cocher marque l'item acheté */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
+                <ShoppingCart className="h-4 w-4 text-brand-500" /> À acheter
+              </h2>
+              <button
+                onClick={() => navigate('/grocery')}
+                className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600"
+              >
+                Liste complète <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl bg-white p-2 shadow-card">
+              {grocery.isLoading ? null : grocery.isError && !grocery.data ? (
+                <ErrorState />
+              ) : pendingItems.length === 0 ? (
+                <EmptyState
+                  icon={ShoppingCart}
+                  title="Rien à acheter"
+                  description="Votre liste de courses est à jour."
+                />
+              ) : (
+                <ul className="divide-y divide-stone-100">
+                  {pendingItems.map((it) => (
+                    <li key={it.id} className="flex items-center gap-3 px-2 py-2.5">
+                      <button
+                        onClick={() => toggleCheck.mutate(it.id)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-stone-300 text-transparent transition hover:border-brand-400 active:scale-95"
+                        aria-label={`Marquer ${it.name} comme acheté`}
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">
+                        {it.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-stone-400">
+                        {it.quantity} {it.unit}
+                      </span>
+                      <StoreLogo store={it.store} />
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${aisleColor(it.aisle)}`}
+                      >
+                        {AISLE_LABELS[it.aisle] ?? it.aisle}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <p className="mt-1.5 px-1 text-xs text-stone-400">
+              Cochez la case pour marquer un élément comme acheté.
+            </p>
+          </section>
+        </main>
+      </PullToRefresh>
 
       <MealDetailsModal
         plan={selectedPlan}

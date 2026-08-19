@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, CalendarDays, Clock } from 'lucide-react';
 import { Header } from '../components/layout/Header';
+import { PullToRefresh } from '../components/common/PullToRefresh';
 import { Calendar } from '../components/calendar/Calendar';
 import { MealPlanningModal } from '../components/modals/MealPlanningModal';
 import { MealDetailsModal } from '../components/modals/MealDetailsModal';
@@ -76,77 +77,79 @@ export function CalendarPage() {
         }
       />
 
-      <main className="flex-1 space-y-5 p-4">
-        <Calendar
-          activeDate={activeDate}
-          onSelectDate={setDate}
-          onViewMonthChange={(r) => setViewRange({ from: r.from, to: r.to })}
-          plannedDays={plannedDays}
-        />
+      <PullToRefresh queryKeys={[['mealPlans']]}>
+        <main className="flex-1 space-y-5 p-4">
+          <Calendar
+            activeDate={activeDate}
+            onSelectDate={setDate}
+            onViewMonthChange={(r) => setViewRange({ from: r.from, to: r.to })}
+            plannedDays={plannedDays}
+          />
 
-        <section>
-          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold capitalize text-stone-700">
-            <Clock className="h-4 w-4 text-brand-500" />
-            {formatShortDate(activeDate)}
-          </h2>
+          <section>
+            <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold capitalize text-stone-700">
+              <Clock className="h-4 w-4 text-brand-500" />
+              {formatShortDate(activeDate)}
+            </h2>
 
-          {dayPlans.isLoading ? (
-            <FullScreenLoader />
-          ) : dayPlans.isError && !dayPlans.data ? (
-            <ErrorState />
-          ) : (dayPlans.data?.length ?? 0) === 0 ? (
-            <div className="rounded-2xl bg-white p-4 shadow-card">
-              <EmptyState
-                icon={CalendarDays}
-                title="Aucun plat planifié ce jour"
-                description="Planifiez un plat pour qu'il apparaisse ici."
-                action={
-                  <Button onClick={() => setParams({ date: activeDate, plan: 'new' })}>
-                    <Plus className="h-4 w-4" /> Planifier un plat
-                  </Button>
-                }
-              />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {dayPlans.data!.map((plan) => {
-                const meal = plan.meal;
-                return (
-                  <div
-                    key={plan.id}
-                    onClick={() => setParams({ date: activeDate, recipe: plan.id })}
-                    className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]"
-                  >
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-stone-100">
-                      {meal.imageUrl ? (
-                        <img src={meal.imageUrl} alt={meal.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-2xl">🍽️</div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-sm font-semibold text-stone-800">{meal.name}</p>
-                      <p className="mt-0.5 text-xs text-stone-400">
-                        Du {formatShortDate(plan.fromDate)} au {formatShortDate(plan.toDate)} ·{' '}
-                        {plan.servings} portion{plan.servings > 1 ? 's' : ''}
-                        {plan.mealType ? ` · ${mealTypeLabel(plan.mealType)}` : ''}
-                      </p>
-                      <span
-                        className={cn(
-                          'mt-1.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                          STATUS_COLORS[plan.status],
+            {dayPlans.isLoading ? (
+              <FullScreenLoader />
+            ) : dayPlans.isError && !dayPlans.data ? (
+              <ErrorState />
+            ) : (dayPlans.data?.length ?? 0) === 0 ? (
+              <div className="rounded-2xl bg-white p-4 shadow-card">
+                <EmptyState
+                  icon={CalendarDays}
+                  title="Aucun plat planifié ce jour"
+                  description="Planifiez un plat pour qu'il apparaisse ici."
+                  action={
+                    <Button onClick={() => setParams({ date: activeDate, plan: 'new' })}>
+                      <Plus className="h-4 w-4" /> Planifier un plat
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {dayPlans.data!.map((plan) => {
+                  const meal = plan.meal;
+                  return (
+                    <div
+                      key={plan.id}
+                      onClick={() => setParams({ date: activeDate, recipe: plan.id })}
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]"
+                    >
+                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-stone-100">
+                        {meal.imageUrl ? (
+                          <img src={meal.imageUrl} alt={meal.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-2xl">🍽️</div>
                         )}
-                      >
-                        {STATUS_LABELS[plan.status]}
-                      </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-semibold text-stone-800">{meal.name}</p>
+                        <p className="mt-0.5 text-xs text-stone-400">
+                          Du {formatShortDate(plan.fromDate)} au {formatShortDate(plan.toDate)} ·{' '}
+                          {plan.servings} portion{plan.servings > 1 ? 's' : ''}
+                          {plan.mealType ? ` · ${mealTypeLabel(plan.mealType)}` : ''}
+                        </p>
+                        <span
+                          className={cn(
+                            'mt-1.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            STATUS_COLORS[plan.status],
+                          )}
+                        >
+                          {STATUS_LABELS[plan.status]}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </main>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
+      </PullToRefresh>
 
       <MealPlanningModal
         plan={isCreating ? null : editingPlan}

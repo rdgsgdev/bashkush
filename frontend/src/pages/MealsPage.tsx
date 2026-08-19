@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, RotateCcw, SearchX, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
+import { PullToRefresh } from '../components/common/PullToRefresh';
 import { MealCard } from '../components/meals/MealCard';
 import { MealsFilters, MealSort } from '../components/meals/MealsFilters';
 import { MealEditionModal } from '../components/modals/MealEditionModal';
@@ -190,64 +191,66 @@ export function MealsPage() {
         }
       />
 
-      {/* Barre de filtres/tri, affichée seulement s'il y a des plats à filtrer. */}
-      {!isLoading && !isError && total > 0 && (
-        <MealsFilters
-          search={search}
-          onSearchChange={setSearch}
-          category={category}
-          onCategoryChange={setCategory}
-          difficulty={difficulty}
-          onDifficultyChange={setDifficulty}
-          favoritesOnly={favoritesOnly}
-          onToggleFavoritesOnly={() => setFavoritesOnly((v) => !v)}
-          sort={sort}
-          onSortChange={setSort}
-          hasActiveFilters={hasActiveFilters}
-          onReset={resetFilters}
-        />
-      )}
-
-      <main className="flex-1 space-y-3 p-4">
-        {isLoading ? (
-          <FullScreenLoader />
-        ) : isError && !meals ? (
-          <ErrorState />
-        ) : total === 0 ? (
-          <EmptyState
-            icon={UtensilsCrossed}
-            title="Aucun plat"
-            description="Créez votre premier plat ou importez un repas depuis un fichier JSON."
-            action={
-              <Button onClick={() => setParams({ meal: 'new' })}>
-                <Plus className="h-4 w-4" /> Créer un plat
-              </Button>
-            }
+      <PullToRefresh queryKeys={[['meals']]}>
+        {/* Barre de filtres/tri, affichée seulement s'il y a des plats à filtrer. */}
+        {!isLoading && !isError && total > 0 && (
+          <MealsFilters
+            search={search}
+            onSearchChange={setSearch}
+            category={category}
+            onCategoryChange={setCategory}
+            difficulty={difficulty}
+            onDifficultyChange={setDifficulty}
+            favoritesOnly={favoritesOnly}
+            onToggleFavoritesOnly={() => setFavoritesOnly((v) => !v)}
+            sort={sort}
+            onSortChange={setSort}
+            hasActiveFilters={hasActiveFilters}
+            onReset={resetFilters}
           />
-        ) : visibleMeals.length === 0 ? (
-          <EmptyState
-            icon={SearchX}
-            title="Aucun résultat"
-            description="Aucun plat ne correspond à votre recherche ou à vos filtres."
-            action={
-              <Button variant="secondary" onClick={resetFilters}>
-                <RotateCcw className="h-4 w-4" /> Réinitialiser les filtres
-              </Button>
-            }
-          />
-        ) : (
-          <div className="space-y-3">
-            {visibleMeals.map((meal) => (
-              <MealCard
-                key={meal.id}
-                meal={meal}
-                layout="list"
-                onClick={() => setParams({ details: meal.id })}
-              />
-            ))}
-          </div>
         )}
-      </main>
+
+        <main className="flex-1 space-y-3 p-4">
+          {isLoading ? (
+            <FullScreenLoader />
+          ) : isError && !meals ? (
+            <ErrorState />
+          ) : total === 0 ? (
+            <EmptyState
+              icon={UtensilsCrossed}
+              title="Aucun plat"
+              description="Créez votre premier plat ou importez un repas depuis un fichier JSON."
+              action={
+                <Button onClick={() => setParams({ meal: 'new' })}>
+                  <Plus className="h-4 w-4" /> Créer un plat
+                </Button>
+              }
+            />
+          ) : visibleMeals.length === 0 ? (
+            <EmptyState
+              icon={SearchX}
+              title="Aucun résultat"
+              description="Aucun plat ne correspond à votre recherche ou à vos filtres."
+              action={
+                <Button variant="secondary" onClick={resetFilters}>
+                  <RotateCcw className="h-4 w-4" /> Réinitialiser les filtres
+                </Button>
+              }
+            />
+          ) : (
+            <div className="space-y-3">
+              {visibleMeals.map((meal) => (
+                <MealCard
+                  key={meal.id}
+                  meal={meal}
+                  layout="list"
+                  onClick={() => setParams({ details: meal.id })}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+      </PullToRefresh>
 
       <MealDetailsModal
         open={detailsOpen}

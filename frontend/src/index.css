@@ -6,6 +6,13 @@
   html {
     -webkit-tap-highlight-color: transparent;
   }
+  /* Pas d'effet d'overscroll natif (rubber-band iOS, pull-to-refresh
+     Chrome) : la top bar reste fixe quand on tire la page vers le bas
+     en haut de scroll — remplacé par le PullToRefresh maison. */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-stone-100 text-stone-800 antialiased;
     font-feature-settings: 'cv11', 'ss01';

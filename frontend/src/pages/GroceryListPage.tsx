@@ -20,6 +20,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { Header } from '../components/layout/Header';
+import { PullToRefresh } from '../components/common/PullToRefresh';
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { GroceryItemRow, GroceryItemRowContent } from '../components/grocery/GroceryItemRow';
@@ -272,188 +273,190 @@ export function GroceryListPage() {
         }
       />
 
-      {/* Onglets */}
-      <div className="flex gap-1 border-b border-stone-200 bg-white px-4">
-        {(['active', 'archived'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'relative px-3 py-2.5 text-sm font-semibold transition',
-              tab === t ? 'text-brand-600' : 'text-stone-400',
-            )}
-          >
-            {t === 'active' ? 'À acheter' : 'Archivés'}
-            {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-500" />}
-          </button>
-        ))}
-      </div>
+      <PullToRefresh queryKeys={[['grocery']]}>
+        {/* Onglets */}
+        <div className="flex gap-1 border-b border-stone-200 bg-white px-4">
+          {(['active', 'archived'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                'relative px-3 py-2.5 text-sm font-semibold transition',
+                tab === t ? 'text-brand-600' : 'text-stone-400',
+              )}
+            >
+              {t === 'active' ? 'À acheter' : 'Archivés'}
+              {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-500" />}
+            </button>
+          ))}
+        </div>
 
-      <main className="flex-1 space-y-4 p-4">
-        {tab === 'active' ? (
-          <>
-            {/* Barre d'actions d'archive */}
-            {activeItems.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={archiveChecked}
-                  disabled={checkedCount === 0}
-                  loading={archive.isPending}
-                  className="!py-2 text-xs"
-                >
-                  <Archive className="h-4 w-4" /> Archiver les cochés{checkedCount ? ` (${checkedCount})` : ''}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={archiveAll}
-                  disabled={activeItems.length === 0}
-                  loading={archive.isPending}
-                  className="!py-2 text-xs"
-                >
-                  <Archive className="h-4 w-4" /> Tout archiver
-                </Button>
-              </div>
-            )}
-
-            {active.isLoading ? (
-              <FullScreenLoader />
-            ) : active.isError && !active.data ? (
-              <ErrorState />
-            ) : groups.length === 0 ? (
-              <EmptyState
-                icon={ShoppingCart}
-                title="Liste vide"
-                description="Planifiez des plats ou ajoutez manuellement des articles pour remplir votre liste."
-                action={
-                  <Button onClick={() => setEditing({ open: true, item: null })}>
-                    <Plus className="h-4 w-4" /> Ajouter un article
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="space-y-3">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCorners}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDragEnd={handleDragEnd}
-                  onDragCancel={handleDragCancel}
-                >
-                  <SortableContext
-                    items={groups.map((g) => `card:${g.aisle}`)}
-                    strategy={verticalListSortingStrategy}
+        <main className="flex-1 space-y-4 p-4">
+          {tab === 'active' ? (
+            <>
+              {/* Barre d'actions d'archive */}
+              {activeItems.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={archiveChecked}
+                    disabled={checkedCount === 0}
+                    loading={archive.isPending}
+                    className="!py-2 text-xs"
                   >
-                    {groups.map((g) => (
-                      <SortableAisleCard key={g.aisle} group={g}>
-                        <SortableContext
-                          items={g.items.map((i) => i.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {g.items.map((item) => (
-                            <SortableGroceryItemRow
-                              key={item.id}
-                              item={item}
-                              aisle={g.aisle}
-                              onToggleCheck={(id) => toggleCheck.mutate(id)}
-                              onEdit={(it) => setEditing({ open: true, item: it })}
-                              onDelete={(id) => remove.mutate(id)}
-                            />
-                          ))}
-                        </SortableContext>
-                      </SortableAisleCard>
-                    ))}
-                  </SortableContext>
+                    <Archive className="h-4 w-4" /> Archiver les cochés{checkedCount ? ` (${checkedCount})` : ''}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={archiveAll}
+                    disabled={activeItems.length === 0}
+                    loading={archive.isPending}
+                    className="!py-2 text-xs"
+                  >
+                    <Archive className="h-4 w-4" /> Tout archiver
+                  </Button>
+                </div>
+              )}
 
-                  {/* Élément « détaché » flottant au-dessus des autres */}
-                  <DragOverlay>
-                    {activeItem && activeDrag ? (
-                      <div
-                        style={{ width: activeDrag.width }}
-                        className="drag-overlay pointer-events-none flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 shadow-2xl ring-1 ring-stone-100"
-                      >
-                        <GroceryItemRowContent item={activeItem} />
-                      </div>
-                    ) : activeCard && activeDrag ? (
-                      <div
-                        style={{ width: activeDrag.width }}
-                        className="drag-overlay pointer-events-none overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-stone-100"
-                      >
-                        <div className="flex items-center justify-between bg-stone-50 px-3 py-2">
-                          <h3 className="text-xs font-bold uppercase tracking-wide text-stone-500">
-                            {activeCard.label}
-                          </h3>
-                          <span className="text-xs text-stone-400">{activeCard.items.length}</span>
-                        </div>
-                        <ul className="divide-y divide-stone-100">
-                          {activeCard.items.map((it) => (
-                            <li key={it.id} className="flex items-center gap-3 px-3 py-2.5">
-                              <GroceryItemRowContent item={it} />
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </DragOverlay>
-                </DndContext>
-              </div>
-            )}
-          </>
-        ) : (
-          // ── Onglet archivés (pas de drag & drop) ──
-          <>
-            {archived.isLoading ? (
-              <FullScreenLoader />
-            ) : archived.isError && !archived.data ? (
-              <ErrorState />
-            ) : (archived.data?.items.length ?? 0) === 0 ? (
-              <EmptyState
-                icon={ArchiveRestore}
-                title="Aucun article archivé"
-                description="Les articles archivés apparaîtront ici et pourront être restaurés."
-              />
-            ) : (
-              <div className="space-y-3">
-                <Button
-                  variant="secondary"
-                      onClick={() => unarchive.mutate(undefined)}
-                  loading={unarchive.isPending}
-                  className="!py-2 text-xs"
-                >
-                  <ArchiveRestore className="h-4 w-4" /> Tout restaurer
-                </Button>
-                <div className="overflow-hidden rounded-2xl bg-white shadow-card">
-                  <ul className="divide-y divide-stone-100">
-                    {archived.data!.items.map((item) => (
-                      <GroceryItemRow
-                        key={item.id}
-                        item={item}
-                        archived
-                        onUnarchive={(id) => unarchive.mutate([id])}
-                        onDelete={(id) => remove.mutate(id)}
-                      />
-                    ))}
-                  </ul>
-                  <div className="border-t border-stone-100 px-3 py-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        if (confirm('Supprimer définitivement tous les articles archivés ?')) {
-                          archived.data!.items.forEach((it) => remove.mutate(it.id));
-                        }
-                      }}
-                      className="w-full text-xs text-red-500"
-                    >
-                      <Trash2 className="h-4 w-4" /> Vider les archives
+              {active.isLoading ? (
+                <FullScreenLoader />
+              ) : active.isError && !active.data ? (
+                <ErrorState />
+              ) : groups.length === 0 ? (
+                <EmptyState
+                  icon={ShoppingCart}
+                  title="Liste vide"
+                  description="Planifiez des plats ou ajoutez manuellement des articles pour remplir votre liste."
+                  action={
+                    <Button onClick={() => setEditing({ open: true, item: null })}>
+                      <Plus className="h-4 w-4" /> Ajouter un article
                     </Button>
+                  }
+                />
+              ) : (
+                <div className="space-y-3">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCorners}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={handleDragCancel}
+                  >
+                    <SortableContext
+                      items={groups.map((g) => `card:${g.aisle}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {groups.map((g) => (
+                        <SortableAisleCard key={g.aisle} group={g}>
+                          <SortableContext
+                            items={g.items.map((i) => i.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {g.items.map((item) => (
+                              <SortableGroceryItemRow
+                                key={item.id}
+                                item={item}
+                                aisle={g.aisle}
+                                onToggleCheck={(id) => toggleCheck.mutate(id)}
+                                onEdit={(it) => setEditing({ open: true, item: it })}
+                                onDelete={(id) => remove.mutate(id)}
+                              />
+                            ))}
+                          </SortableContext>
+                        </SortableAisleCard>
+                      ))}
+                    </SortableContext>
+
+                    {/* Élément « détaché » flottant au-dessus des autres */}
+                    <DragOverlay>
+                      {activeItem && activeDrag ? (
+                        <div
+                          style={{ width: activeDrag.width }}
+                          className="drag-overlay pointer-events-none flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 shadow-2xl ring-1 ring-stone-100"
+                        >
+                          <GroceryItemRowContent item={activeItem} />
+                        </div>
+                      ) : activeCard && activeDrag ? (
+                        <div
+                          style={{ width: activeDrag.width }}
+                          className="drag-overlay pointer-events-none overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-stone-100"
+                        >
+                          <div className="flex items-center justify-between bg-stone-50 px-3 py-2">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-stone-500">
+                              {activeCard.label}
+                            </h3>
+                            <span className="text-xs text-stone-400">{activeCard.items.length}</span>
+                          </div>
+                          <ul className="divide-y divide-stone-100">
+                            {activeCard.items.map((it) => (
+                              <li key={it.id} className="flex items-center gap-3 px-3 py-2.5">
+                                <GroceryItemRowContent item={it} />
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </DragOverlay>
+                  </DndContext>
+                </div>
+              )}
+            </>
+          ) : (
+            // ── Onglet archivés (pas de drag & drop) ──
+            <>
+              {archived.isLoading ? (
+                <FullScreenLoader />
+              ) : archived.isError && !archived.data ? (
+                <ErrorState />
+              ) : (archived.data?.items.length ?? 0) === 0 ? (
+                <EmptyState
+                  icon={ArchiveRestore}
+                  title="Aucun article archivé"
+                  description="Les articles archivés apparaîtront ici et pourront être restaurés."
+                />
+              ) : (
+                <div className="space-y-3">
+                  <Button
+                    variant="secondary"
+                        onClick={() => unarchive.mutate(undefined)}
+                    loading={unarchive.isPending}
+                    className="!py-2 text-xs"
+                  >
+                    <ArchiveRestore className="h-4 w-4" /> Tout restaurer
+                  </Button>
+                  <div className="overflow-hidden rounded-2xl bg-white shadow-card">
+                    <ul className="divide-y divide-stone-100">
+                      {archived.data!.items.map((item) => (
+                        <GroceryItemRow
+                          key={item.id}
+                          item={item}
+                          archived
+                          onUnarchive={(id) => unarchive.mutate([id])}
+                          onDelete={(id) => remove.mutate(id)}
+                        />
+                      ))}
+                    </ul>
+                    <div className="border-t border-stone-100 px-3 py-2">
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          if (confirm('Supprimer définitivement tous les articles archivés ?')) {
+                            archived.data!.items.forEach((it) => remove.mutate(it.id));
+                          }
+                        }}
+                        className="w-full text-xs text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" /> Vider les archives
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+              )}
+            </>
+          )}
+        </main>
+      </PullToRefresh>
 
       <GroceryItemModal
         item={editing.item}
