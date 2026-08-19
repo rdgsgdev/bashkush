@@ -150,55 +150,61 @@ export function MealDetailsContent({
           <ol className="space-y-2">
             {steps.map((step) => {
               const isDone = isInteractive && stepsInteraction!.done.has(step.stepNumber);
-              const toggleStep = () => stepsInteraction?.onToggle(step.stepNumber);
-              return (
-                <li
-                  key={step.stepNumber}
-                  // Toute la ligne est cochable en contexte planification
-                  onClick={isInteractive ? toggleStep : undefined}
-                  onKeyDown={
-                    isInteractive
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            toggleStep();
-                          }
-                        }
-                      : undefined
-                  }
-                  role={isInteractive ? 'checkbox' : undefined}
-                  aria-checked={isInteractive ? isDone : undefined}
-                  tabIndex={isInteractive ? 0 : undefined}
+              const badge = isInteractive ? (
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    'flex items-start gap-3 rounded-xl border bg-white p-3 transition',
-                    isInteractive && 'cursor-pointer hover:border-brand-300',
-                    isDone ? 'border-brand-200 bg-brand-50/50' : 'border-stone-200',
+                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition',
+                    isDone ? 'border-brand-500 bg-brand-500 text-white' : 'border-stone-300 text-transparent',
                   )}
                 >
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+              ) : (
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
+                  {step.stepNumber}
+                </span>
+              );
+              const label = (
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-bold uppercase tracking-wide text-brand-600">
+                    Étape {step.stepNumber}
+                    {step.time ? <span className="font-normal text-stone-400"> · {step.time} min</span> : null}
+                  </span>
+                  <span
+                    className={cn(
+                      'block text-sm leading-relaxed text-stone-700',
+                      isDone && 'text-stone-400 line-through',
+                    )}
+                  >
+                    {step.instruction}
+                  </span>
+                </span>
+              );
+              return (
+                <li key={step.stepNumber}>
                   {isInteractive ? (
-                    <span
-                      aria-hidden="true"
+                    // Bouton pleine largeur : Safari (iOS) ne génère pas
+                    // d'évènement click fiable sur les éléments non
+                    // interactifs comme <li> — un vrai <button> marche partout.
+                    <button
+                      type="button"
+                      aria-pressed={isDone}
+                      onClick={() => stepsInteraction!.onToggle(step.stepNumber)}
                       className={cn(
-                        'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition',
-                        isDone ? 'border-brand-500 bg-brand-500 text-white' : 'border-stone-300 text-transparent',
+                        'flex w-full cursor-pointer items-start gap-3 rounded-xl border bg-white p-3 text-left transition hover:border-brand-300',
+                        isDone ? 'border-brand-200 bg-brand-50/50' : 'border-stone-200',
                       )}
                     >
-                      <Check className="h-3.5 w-3.5" />
-                    </span>
+                      {badge}
+                      {label}
+                    </button>
                   ) : (
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
-                      {step.stepNumber}
-                    </span>
+                    <div className="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-3">
+                      {badge}
+                      {label}
+                    </div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold uppercase tracking-wide text-brand-600">
-                      Étape {step.stepNumber}
-                      {step.time ? <span className="font-normal text-stone-400"> · {step.time} min</span> : null}
-                    </p>
-                    <p className={cn('text-sm leading-relaxed text-stone-700', isDone && 'text-stone-400 line-through')}>
-                      {step.instruction}
-                    </p>
-                  </div>
                 </li>
               );
             })}
