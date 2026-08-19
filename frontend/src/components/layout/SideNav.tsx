@@ -28,7 +28,8 @@ const NAV = [
  * Menu latéral desktop (≥ 1024px), toujours visible et entièrement vert :
  * remplace le burger mobile. Repliable en mode icônes seules (état persisté
  * dans le cache) via le bouton révélé au survol, à mi-hauteur du menu.
- * La carte « Mon profil » est blanche pour ressortir sur le fond vert.
+ * La carte « Mon profil » reprend le style d'un lien sélectionné (fond
+ * vert clair, texte blanc).
  */
 export function SideNav() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -120,7 +121,7 @@ export function SideNav() {
         })}
       </ul>
 
-      {/* Bas de menu : paramètres, déconnexion, profil (carte blanche) */}
+      {/* Bas de menu : paramètres, déconnexion, profil (style lien sélectionné) */}
       <div className="space-y-1 border-t border-white/15 p-3">
         <button
           onClick={() => navigate('/parametres')}
@@ -142,13 +143,14 @@ export function SideNav() {
           {!collapsed && 'Déconnexion'}
         </button>
 
-        {/* Carte profil blanche : ressort sur le fond vert du menu.
-            Repliée : pastille blanche réduite à la photo. */}
+        {/* Carte profil façon lien sélectionné : fond vert clair (blanc
+            translucide sur le vert) et texte blanc, comme les liens actifs.
+            Repliée : pastille réduite à la photo. */}
         <button
           onClick={() => navigate('/profil')}
           title={collapsed ? profile?.fullName || 'Mon profil' : undefined}
           className={cn(
-            'mt-2 flex w-full items-center rounded-xl bg-white text-left text-sm font-semibold text-stone-800 shadow-card transition hover:bg-stone-50',
+            'mt-2 flex w-full items-center rounded-xl bg-white/15 text-left text-sm font-semibold text-white transition hover:bg-white/25',
             collapsed ? 'justify-center p-1.5' : 'gap-3 p-2',
             location.pathname === '/profil' && 'ring-2 ring-white',
           )}
@@ -158,20 +160,20 @@ export function SideNav() {
               src={profile.photoUrl}
               alt="Photo de profil"
               onError={() => setPhotoFailed(true)}
-              className="h-10 w-10 shrink-0 rounded-full border-2 border-brand-100 object-cover"
+              className="h-10 w-10 shrink-0 rounded-full border-2 border-white/70 object-cover"
             />
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-bold text-white">
               {(profile?.fullName || user?.email || '?').charAt(0).toUpperCase()}
             </div>
           )}
           {!collapsed && (
             <div className="flex min-w-0 flex-1 flex-col items-start">
-              <span className="max-w-full truncate text-sm font-semibold text-stone-800">
+              <span className="max-w-full truncate text-sm font-semibold text-white">
                 {profile?.fullName || 'Mon profil'}
               </span>
               {user?.email && (
-                <span className="max-w-full truncate text-xs font-normal text-stone-500">
+                <span className="max-w-full truncate text-xs font-normal text-white/70">
                   {user.email}
                 </span>
               )}

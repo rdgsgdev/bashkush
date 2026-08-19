@@ -76,6 +76,7 @@ export function MealCard({ meal, onClick, layout = 'list', showFavorite = true, 
   // layout list
   return (
     <button
+      data-meal-id={meal.id}
       onClick={onClick}
       className={cn(
         'group flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]',

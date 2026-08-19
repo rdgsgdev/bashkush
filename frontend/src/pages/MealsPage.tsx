@@ -151,6 +151,21 @@ export function MealsPage() {
   const detailsParam = params.get('details');
   const detailsMeal = meals?.find((m) => m.id === detailsParam) ?? null;
   const detailsOpen = Boolean(detailsParam);
+
+  // Arrivée depuis l'accueil avec ?details= : défile jusqu'à la carte ciblée
+  // dès qu'elle est rendue (les plats peuvent arriver après le montage).
+  // Une seule tentative par valeur : cliquer une carte déjà visible ne
+  // déclenche rien (`block: 'nearest'` serait de toute façon sans effet).
+  const mealsListRef = useRef<HTMLDivElement>(null);
+  const scrolledToMeal = useRef<string | null>(null);
+  useEffect(() => {
+    if (!detailsParam || scrolledToMeal.current === detailsParam) return;
+    const el = mealsListRef.current?.querySelector<HTMLElement>(`[data-meal-id="${detailsParam}"]`);
+    if (!el) return;
+    scrolledToMeal.current = detailsParam;
+    el.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+  }, [detailsParam, meals]);
+
   const closeDetails = () => {
     params.delete('details');
     setParams(params, { replace: true });
@@ -238,7 +253,7 @@ export function MealsPage() {
               }
             />
           ) : (
-            <div className="space-y-3">
+            <div ref={mealsListRef} className="space-y-3">
               {visibleMeals.map((meal) => (
                 <MealCard
                   key={meal.id}

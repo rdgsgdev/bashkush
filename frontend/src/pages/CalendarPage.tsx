@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, CalendarDays, Clock } from 'lucide-react';
 import { Header } from '../components/layout/Header';
@@ -50,6 +50,20 @@ export function CalendarPage() {
   const recipeParam = params.get('recipe');
   const detailsPlan = dayPlans.data?.find((p) => p.id === recipeParam) ?? null;
   const detailsOpen = Boolean(recipeParam);
+
+  // Arrivée depuis l'accueil avec ?recipe= : défile jusqu'à la carte ciblée
+  // dès qu'elle est rendue (les plans peuvent arriver après le montage).
+  // Une seule tentative par valeur : cliquer une carte déjà visible ne
+  // déclenche rien (`block: 'nearest'` serait de toute façon sans effet).
+  const plansListRef = useRef<HTMLDivElement>(null);
+  const scrolledToPlan = useRef<string | null>(null);
+  useEffect(() => {
+    if (!recipeParam || scrolledToPlan.current === recipeParam) return;
+    const el = plansListRef.current?.querySelector<HTMLElement>(`[data-plan-id="${recipeParam}"]`);
+    if (!el) return;
+    scrolledToPlan.current = recipeParam;
+    el.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+  }, [recipeParam, dayPlans.data]);
 
   const closeModal = () => {
     params.delete('plan');
@@ -110,14 +124,19 @@ export function CalendarPage() {
                 />
               </div>
             ) : (
-              <div className="space-y-3">
+              <div ref={plansListRef} className="space-y-3">
                 {dayPlans.data!.map((plan) => {
                   const meal = plan.meal;
                   return (
                     <div
                       key={plan.id}
+                      data-plan-id={plan.id}
                       onClick={() => setParams({ date: activeDate, recipe: plan.id })}
-                      className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]"
+                      className={cn(
+                        'flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-card transition active:scale-[0.99]',
+                        // Desktop : la carte ouverte dans le side panel reste marquée.
+                        recipeParam === plan.id && 'lg:ring-2 lg:ring-inset lg:ring-brand-500',
+                      )}
                     >
                       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-stone-100">
                         {meal.imageUrl ? (
