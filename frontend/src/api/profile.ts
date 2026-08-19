@@ -44,6 +44,11 @@ export async function uploadProfileImage(file: File): Promise<Profile> {
   return data;
 }
 
+/** Suppression définitive du compte (données + utilisateur Auth). */
+export async function deleteAccount(): Promise<void> {
+  await api.delete('/profile');
+}
+
 export function useProfile() {
   return useQuery({
     queryKey: queryKeys.profile,
@@ -75,4 +80,8 @@ export function useUploadProfileImage() {
     mutationFn: uploadProfileImage,
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.profile }),
   });
+}
+
+export function useDeleteAccount() {
+  return useMutation({ mutationFn: deleteAccount });
 }

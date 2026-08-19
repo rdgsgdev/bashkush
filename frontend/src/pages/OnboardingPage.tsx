@@ -315,9 +315,12 @@ export function OnboardingPage() {
   );
 
   return (
-    <div className="app-container flex min-h-dvh flex-col bg-stone-50">
+    // h-dvh (et non min-h-dvh) : le contenu défile dans <main>, la barre de
+    // navigation reste visible en bas sur mobile comme sur desktop.
+    // min-h-0 neutralise le min-h-screen de .app-container.
+    <div className="app-container flex h-dvh min-h-0 flex-col bg-stone-50">
       {/* Progression */}
-      <header className="bg-white px-4 pb-3 pt-4 shadow-card">
+      <header className="shrink-0 bg-white px-4 pb-3 pt-4 shadow-card">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
             Étape {stepIndex + 1}/{STEPS.length}
@@ -336,8 +339,8 @@ export function OnboardingPage() {
         </div>
       </header>
 
-      {/* Contenu */}
-      <main className="flex-1 overflow-y-auto px-4 py-6">
+      {/* Contenu — centré (largeur limitée) sur desktop, scrollable */}
+      <main className="flex-1 overflow-y-auto px-4 py-6 lg:mx-auto lg:w-full lg:max-w-2xl">
         <h1 className="text-xl font-bold text-stone-800">{step.title}</h1>
         <p className="mb-5 mt-1 text-sm text-stone-500">{step.subtitle}</p>
 
@@ -348,8 +351,8 @@ export function OnboardingPage() {
         <div className="space-y-5">{step.render(draft, set)}</div>
       </main>
 
-      {/* Navigation */}
-      <footer className="border-t border-stone-100 bg-white px-4 py-3">
+      {/* Navigation — toujours visible en bas de l'écran */}
+      <footer className="shrink-0 border-t border-stone-100 bg-white px-4 py-3">
         <div className="flex items-center gap-2">
           {stepIndex > 0 && (
             <Button variant="secondary" onClick={() => setStepIndex((i) => i - 1)}>

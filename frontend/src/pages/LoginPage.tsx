@@ -1,5 +1,9 @@
-import { useState } from 'react';
+import { FormEvent, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+/** Modes de l'écran d'authentification (seul le contenu gauche change). */
+type AuthMode = 'signin' | 'signup' | 'forgot';
 
 /** Logo Google "G" multicolore (officiel, SVG inline). */
 function GoogleIcon() {
@@ -25,13 +29,118 @@ function GoogleIcon() {
   );
 }
 
+/** Traduit les messages d'erreur Supabase les plus courants en français. */
+function translateAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'Courriel ou mot de passe incorrect.';
+  if (m.includes('email not confirmed'))
+    return "Votre courriel n'a pas encore été confirmé. Vérifiez votre boîte de réception.";
+  if (m.includes('already registered'))
+    return 'Un compte existe déjà avec ce courriel. Essayez de vous connecter.';
+  if (m.includes('at least 6 characters'))
+    return 'Le mot de passe doit contenir au moins 6 caractères.';
+  if (m.includes('rate limit') || m.includes('too many'))
+    return 'Trop de tentatives. Veuillez patienter quelques instants avant de réessayer.';
+  if (m.includes('invalid email') || m.includes('validate email'))
+    return 'Adresse courriel invalide.';
+  if (m.includes('password')) return 'Mot de passe invalide.';
+  return 'Une erreur est survenue. Veuillez réessayer.';
+}
+
+/** Champ courriel — style « pilule grise » du design. */
+function EmailField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-stone-700">
+        Courriel
+      </label>
+      <input
+        id="email"
+        type="email"
+        autoComplete="email"
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="vous@exemple.com"
+        className="w-full rounded-xl border border-transparent bg-stone-100 px-4 py-3 text-sm text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
+      />
+    </div>
+  );
+}
+
+/** Champ mot de passe avec bascule de visibilité. */
+function PasswordField({
+  value,
+  onChange,
+  autoComplete = 'current-password',
+  action,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete?: string;
+  /** Lien optionnel affiché à droite du libellé (ex : mot de passe oublié). */
+  action?: { label: string; onClick: () => void };
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <label htmlFor="password" className="block text-sm font-medium text-stone-700">
+          Mot de passe
+        </label>
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="text-sm font-medium text-brand-600 transition hover:text-brand-700"
+          >
+            {action.label}
+          </button>
+        )}
+      </div>
+      <div className="relative">
+        <input
+          id="password"
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          required
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="••••••••"
+          className="w-full rounded-xl border border-transparent bg-stone-100 px-4 py-3 pr-12 text-sm text-stone-800 outline-none transition placeholder:text-stone-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 transition hover:text-stone-600"
+        >
+          {visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function LoginPage() {
+  const [mode, setMode] = useState<AuthMode>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, setPending] = useState<null | 'email' | 'google'>(null);
+
+  /** Change de mode (connexion / inscription / oubli) en nettoyant les retours. */
+  const switchMode = (next: AuthMode) => {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+    setPassword('');
+  };
 
   const signInWithGoogle = async () => {
     setError(null);
-    setPending(true);
+    setPending('google');
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
@@ -40,41 +149,210 @@ export function LoginPage() {
       setError(
         'Impossible de démarrer la connexion avec Google. Vérifiez que le provider est activé dans Supabase.',
       );
-      setPending(false);
+      setPending(null);
       return;
     }
     // Succès → le navigateur est redirigé vers Google,
     // puis revient sur l'app où la session est détectée automatiquement.
   };
 
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Veuillez entrer votre adresse courriel.');
+      return;
+    }
+    if (mode !== 'forgot' && password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
+
+    setPending('email');
+    try {
+      if (mode === 'signin') {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+        if (signInError) setError(translateAuthError(signInError.message));
+        // Succès → la session est détectée par AuthInitializer → redirection auto.
+      } else if (mode === 'signup') {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (signUpError) {
+          setError(translateAuthError(signUpError.message));
+          return;
+        }
+        if (!data.session) {
+          // Confirmation par courriel requise → on bascule vers la connexion.
+          setPassword('');
+          setMode('signin');
+          setNotice(
+            'Compte créé! Vérifiez votre boîte de réception pour confirmer votre courriel, puis connectez-vous.',
+          );
+        }
+        // Sinon session immédiate → redirection automatique vers l'app.
+      } else {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+          redirectTo: window.location.origin,
+        });
+        if (resetError) {
+          setError(translateAuthError(resetError.message));
+          return;
+        }
+        setEmail('');
+        setNotice(
+          "Si un compte existe pour ce courriel, un lien de réinitialisation vient d'être envoyé.",
+        );
+      }
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const isSignup = mode === 'signup';
+  const isForgot = mode === 'forgot';
+  const submitLabel = isSignup ? "S'inscrire" : isForgot ? 'Envoyer le lien' : 'Se connecter';
+  const pendingLabel = isSignup ? 'Inscription…' : isForgot ? 'Envoi…' : 'Connexion…';
+
   return (
-    <div className="relative flex min-h-dvh flex-col bg-brand-500">
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
-        <h1 className="mb-6 text-center text-2xl text-white">
-          Veuillez vous connecter pour commencer à faire du
-        </h1>
-        <h2 className="mb-6 text-center text-2xl font-bold italic text-white">
-          BashhhhhKuuuuuush!
-        </h2>
+    <div className="flex min-h-dvh bg-[#FEFDF9]">
+      {/* Colonne gauche : logo + formulaire (tout le contenu sur mobile) */}
+      <div className="flex w-full flex-col px-6 py-6 sm:px-10 lg:w-[47%] lg:px-14 xl:px-20">
+        <img src="/logo_horizontal_green_black.svg" alt="Bashkush" className="h-7 w-auto sm:h-8" />
 
-        <button
-          onClick={signInWithGoogle}
-          disabled={pending}
-          className="flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3.5 text-sm font-semibold text-stone-700 shadow-sm transition active:scale-[0.98] disabled:opacity-60"
-        >
-          <GoogleIcon />
-          {pending ? 'Connexion…' : 'Continuer avec Google'}
-        </button>
+        <div className="flex flex-1 items-center justify-center py-10">
+          <div className="w-full max-w-md">
+            {isForgot ? (
+              <>
+                <h1 className="mb-2 text-2xl font-bold leading-snug text-stone-800">
+                  Mot de passe oublié?
+                </h1>
+                <p className="mb-8 text-sm leading-relaxed text-stone-500">
+                  Entrez votre courriel et nous vous enverrons un lien pour réinitialiser votre
+                  mot de passe.
+                </p>
+              </>
+            ) : (
+              <h1 className="mb-8 text-2xl font-bold leading-snug text-stone-800">
+                {isSignup
+                  ? 'Créez votre compte pour commencer à faire du '
+                  : 'Veuillez vous connecter pour commencer à faire du '}
+                <span className="italic">Bashhhhhkuuuuuush!</span>
+              </h1>
+            )}
 
-        {error && <p className="mt-2 max-w-xs text-center text-xs text-white/90">{error}</p>}
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              <EmailField value={email} onChange={setEmail} />
+
+              {!isForgot && (
+                <PasswordField
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete={isSignup ? 'new-password' : 'current-password'}
+                  action={
+                    !isSignup
+                      ? { label: 'Mot de passe oublié?', onClick: () => switchMode('forgot') }
+                      : undefined
+                  }
+                />
+              )}
+
+              {error && (
+                <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
+              )}
+              {notice && (
+                <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm leading-relaxed text-brand-700">
+                  {notice}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={pending !== null}
+                className="w-full rounded-full bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:scale-[0.98] disabled:opacity-60"
+              >
+                {pending === 'email' ? pendingLabel : submitLabel}
+              </button>
+            </form>
+
+            {!isForgot && (
+              <>
+                {/* Séparateur */}
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center" aria-hidden>
+                    <span className="w-full border-t border-stone-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs font-medium uppercase tracking-wide text-stone-400">
+                    <span className="bg-[#FEFDF9] px-4">ou</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={signInWithGoogle}
+                  disabled={pending !== null}
+                  className="flex w-full items-center justify-center gap-3 rounded-full border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-[0.98] disabled:opacity-60"
+                >
+                  <GoogleIcon />
+                  {pending === 'google' ? 'Connexion…' : 'Continuer avec Google'}
+                </button>
+              </>
+            )}
+
+            <p className="mt-8 text-center text-sm text-stone-500">
+              {isSignup ? (
+                <>
+                  Déjà un compte?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchMode('signin')}
+                    className="font-semibold text-brand-600 transition hover:text-brand-700"
+                  >
+                    Se connecter
+                  </button>
+                </>
+              ) : isForgot ? (
+                <button
+                  type="button"
+                  onClick={() => switchMode('signin')}
+                  className="font-semibold text-brand-600 transition hover:text-brand-700"
+                >
+                  Retour à la connexion
+                </button>
+              ) : (
+                <>
+                  Pas encore de compte?{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchMode('signup')}
+                    className="font-semibold text-brand-600 transition hover:text-brand-700"
+                  >
+                    S'inscrire
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Logo Bashkush — bas gauche */}
-      <img
-        src="/logo-menu.png"
-        alt="Bashkush"
-        className="absolute bottom-4 left-4 h-40 w-auto object-contain"
-      />
+      {/* Colonne droite : illustration (80 % de la colonne, centrée, fond
+          visible autour) — masquée sur mobile */}
+      <div className="relative hidden flex-1 items-center justify-center lg:flex">
+        <img
+          src="/logo_illustration.png"
+          alt="Illustration Bashkush"
+          className="h-4/5 w-4/5 object-contain"
+        />
+      </div>
     </div>
   );
 }

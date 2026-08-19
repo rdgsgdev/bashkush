@@ -12,15 +12,18 @@ import {
   Ruler,
   StickyNote,
   Target,
+  Trash2,
   User,
   Users,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Header } from '../components/layout/Header';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { Field, Input, Textarea } from '../components/ui/FormControl';
 import { SingleChoice, MultiChoice, type ChoiceOption } from '../components/onboarding/Choice';
 import { FamilyMembers, FamilyInvite } from '../components/profile/FamilySection';
-import { useProfile, useSaveProfile, useUploadProfileImage } from '../api/profile';
+import { useProfile, useSaveProfile, useUploadProfileImage, useDeleteAccount } from '../api/profile';
 import { useAuthStore } from '../store/authStore';
 import { useConnection } from '../hooks/useConnection';
 import { computeDailyTargets } from '../lib/nutrition';
@@ -84,10 +87,16 @@ function Section({
 
 export function ProfilePage() {
   const user = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
   const { data: profile } = useProfile();
   const saveProfile = useSaveProfile();
   const uploadImage = useUploadProfileImage();
+  const deleteAccount = useDeleteAccount();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Suppression du compte : modale de confirmation (action définitive).
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // L'upload de photo passe par Supabase Storage : connexion requise.
   const { status } = useConnection();
@@ -204,6 +213,23 @@ export function ProfilePage() {
         setError(
           (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
             'Impossible de téléverser la photo.',
+        ),
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    setDeleteError(null);
+    deleteAccount.mutate(undefined, {
+      onSuccess: async () => {
+        setDeleteOpen(false);
+        // La session et les caches locaux sont purgés par signOut ; la
+        // redirection vers /login est automatique (session nulle).
+        await signOut();
+      },
+      onError: (err) =>
+        setDeleteError(
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            'Impossible de supprimer le compte. Réessaie plus tard.',
         ),
     });
   };
@@ -563,6 +589,66 @@ export function ProfilePage() {
             </Field>
           </section>
         </div>
+
+        {/* Suppression du compte — action définitive, isolée en bas de page */}
+        <div className="mt-4">
+          <section className="card space-y-3 border border-red-100">
+            <h2 className="flex items-center gap-2.5 text-sm font-bold uppercase tracking-wide text-red-600">
+              <Trash2 className="h-4 w-4 shrink-0" />
+              Supprimer mon compte
+            </h2>
+            <p className="text-sm leading-relaxed text-stone-500">
+              Cette action est définitive : ton profil, ta photo et tes invitations seront
+              supprimés. Les plats et listes de courses partagés avec ta famille seront conservés
+              — sauf si tu en es le dernier membre.
+            </p>
+            <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+              Supprimer mon compte
+            </Button>
+          </section>
+        </div>
+
+        {/* Confirmation de suppression */}
+        <Modal
+          open={deleteOpen}
+          onClose={() => setDeleteOpen(false)}
+          title="Supprimer mon compte ?"
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDeleteOpen(false)}>
+                Annuler
+              </Button>
+              <Button
+                variant="danger"
+                loading={deleteAccount.isPending}
+                onClick={handleDeleteAccount}
+              >
+                Supprimer définitivement
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-stone-800">
+              Cette action est irréversible. Sera supprimé :
+            </p>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm text-stone-600">
+              <li>ton profil (identité, mesures, objectifs, santé, notes) et ta photo ;</li>
+              <li>tes invitations de famille envoyées et reçues ;</li>
+              <li>
+                les plats, planifications et listes de courses de ta famille, uniquement si tu en
+                es le dernier membre.
+              </li>
+            </ul>
+            <p className="text-sm text-stone-500">
+              Tes plats et listes partagés avec d'autres membres resteront accessibles à ta famille.
+            </p>
+            {deleteError && (
+              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{deleteError}</div>
+            )}
+          </div>
+        </Modal>
 
         {error && (
           <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>

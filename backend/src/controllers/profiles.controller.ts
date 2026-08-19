@@ -8,6 +8,7 @@ import { deleteImage, uploadImage } from '../lib/storage';
 import { computeDailyTargets } from '../lib/nutrition';
 import { ensureFamilyId } from '../lib/family';
 import { emitFamilyInvalidation } from '../realtime/io';
+import { supabase } from '../config/supabase';
 
 /** Profil de l'utilisateur connecté (ou `{ onboarded: false }` s'il n'existe pas encore). */
 export const getProfile = asyncHandler(async (req: AuthedRequest, res: Response) => {
@@ -96,4 +97,81 @@ export const uploadProfileImage = asyncHandler(async (req: AuthedRequest, res: R
     data: { photoUrl: url, imagePath: path },
   });
   res.json(updated);
+});
+
+/**
+ * Suppression du compte de l'utilisateur connecté :
+ * - profil, photo et invitations envoyées (cascade Prisma) ;
+ * - invitations/memberships pointant vers son courriel ;
+ * - jobs IA en cours ;
+ * - si sa famille devient orpheline (plus aucun compte rattaché) : plats,
+ *   planifications, liste de courses et options de la famille ;
+ * - l'utilisateur Supabase Auth est supprimé en dernier (le jeton du client
+ *   devient invalide → déconnexion automatique).
+ */
+export const deleteAccount = asyncHandler(async (req: AuthedRequest, res: Response) => {
+  const userId = req.authUser!.id;
+  const memberEmail = (req.authUser!.email ?? '').toLowerCase();
+
+  // Chemins Storage à nettoyer — collectés avant la transaction.
+  const existing = await prisma.profile.findUnique({ where: { userId } });
+  const familyId = existing?.familyId ?? null;
+  const mealImagePaths = familyId
+    ? (
+        await prisma.meal.findMany({
+          where: { familyId },
+          select: { imagePath: true },
+        })
+      )
+        .map((m) => m.imagePath)
+        .filter((p): p is string => Boolean(p))
+    : [];
+
+  await prisma.$transaction(async (tx) => {
+    // Invitations envoyées : cascade. Memberships : memberUserId → null.
+    if (existing) {
+      await tx.profile.delete({ where: { userId } });
+    }
+    // Toute trace du courriel dans les familles (invitations en attente,
+    // memberships acceptés désormais détachés).
+    if (memberEmail) {
+      await tx.familyMember.deleteMany({ where: { memberEmail } });
+    }
+    await tx.aiMealJob.deleteMany({ where: { userId } });
+
+    // Famille orpheline (aucun profil restant) → données partagées supprimées.
+    if (familyId) {
+      const remaining = await tx.profile.count({ where: { familyId } });
+      if (remaining === 0) {
+        await tx.aiMealJob.deleteMany({ where: { familyId } });
+        // Plats d'abord : ingrédients, étapes et planifications cascadent,
+        // et avec eux les contributions à la liste de courses.
+        await tx.meal.deleteMany({ where: { familyId } });
+        await tx.mealPlan.deleteMany({ where: { familyId } });
+        await tx.groceryItem.deleteMany({ where: { familyId } });
+        await tx.listOption.deleteMany({ where: { familyId } });
+        await tx.familyMember.deleteMany({ where: { familyId } });
+        await tx.family.delete({ where: { id: familyId } });
+      }
+    }
+  });
+
+  // Storage : nettoyage fire-and-forget — la base est déjà supprimée, une
+  // image résiduelle ne doit pas faire échouer la requête.
+  const paths = [existing?.imagePath, ...mealImagePaths].filter(
+    (p): p is string => Boolean(p),
+  );
+  for (const path of paths) {
+    deleteImage(path).catch(() => undefined);
+  }
+
+  // Auth en dernier : au moindre échec côté Supabase, les données métier
+  // sont déjà parties mais l'utilisateur peut reprendre la main.
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('Auth user deletion error:', error);
+    throw new HttpError(500, 'Compte supprimé côté application mais l’utilisateur Auth subsiste — contactez le support.');
+  }
+  res.status(204).end();
 });

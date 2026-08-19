@@ -5,6 +5,7 @@ import { AppRouter } from './router';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './store/authStore';
 import { queryClient } from './queryClient';
+import { ensureCacheOwner } from './api/persist';
 import { initConnection } from './offline/connection';
 import { LiveSyncInitializer } from './realtime/LiveSyncInitializer';
 
@@ -13,11 +14,23 @@ function AuthInitializer() {
   const setSession = useAuthStore((s) => s.setSession);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(async ({ data }) => {
+      // Purge le cache s'il appartient à un autre compte AVANT de débloquer
+      // le rendu — sinon les requêtes restaureraient les données du compte
+      // précédent depuis IndexedDB.
+      if (data.session) await ensureCacheOwner(data.session.user.id);
+      setSession(data.session);
+    });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        void ensureCacheOwner(session.user.id).finally(() => setSession(session));
+      } else {
+        setSession(null);
+      }
+    });
 
     return () => subscription.unsubscribe();
   }, [setSession]);

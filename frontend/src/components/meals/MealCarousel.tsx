@@ -257,7 +257,7 @@ export function MealCarousel({ selectedId, onSelect, onAdd, scrollToId }: MealCa
         {onAdd && (
           <button
             onClick={onAdd}
-            className="flex w-44 shrink-0 flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50 text-brand-600 shadow-card transition active:scale-[0.98]"
+            className="flex min-h-52 w-44 shrink-0 flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50 text-brand-600 shadow-card transition active:scale-[0.98]"
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-500 text-white">
               <Plus className="h-5 w-5" />
