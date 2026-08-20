@@ -30,12 +30,14 @@
 }
 
 @layer components {
-  /* Conteneur mobile-first centré (max 480px) ; plein écran sur desktop :
-     le layout passe en menu latéral + contenu + side panel (cf. AppShell). */
+  /* Conteneur mobile-first centré (max 480px) ; plein écran dès 640px
+     (téléphone en paysage, tablette) avec le layout mobile élargi — le
+     layout desktop (menu latéral + side panel, cf. AppShell) prend le
+     relais à 1024px. */
   .app-container {
     @apply mx-auto min-h-screen max-w-app bg-stone-50 shadow-soft;
   }
-  @media (min-width: 1024px) {
+  @media (min-width: 640px) {
     .app-container {
       max-width: none;
       box-shadow: none;

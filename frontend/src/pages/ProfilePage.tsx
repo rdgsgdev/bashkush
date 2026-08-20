@@ -255,7 +255,7 @@ export function ProfilePage() {
     <div className="flex flex-1 flex-col">
       <Header title="Mon profil" subtitle={draft.fullName || user?.email} />
 
-      <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6 lg:mx-auto lg:w-full lg:max-w-3xl">
+      <main className="flex-1 overflow-y-auto bg-stone-50 px-4 py-5 pb-6 md:mx-auto md:w-full md:max-w-3xl">
         {/* Objectifs quotidiens — éditables, icône ↻ pour recalculer
             (toujours visibles, pas de carte repliable) */}
         <section className="card bg-brand-500 text-white">

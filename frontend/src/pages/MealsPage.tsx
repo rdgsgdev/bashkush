@@ -225,7 +225,7 @@ export function MealsPage() {
           />
         )}
 
-        <main className="flex-1 space-y-3 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
+        <main className="flex-1 space-y-3 p-4 md:mx-auto md:w-full md:max-w-3xl">
           {isLoading ? (
             <FullScreenLoader />
           ) : isError && !meals ? (
@@ -253,7 +253,9 @@ export function MealsPage() {
               }
             />
           ) : (
-            <div ref={mealsListRef} className="space-y-3">
+            // Grille 2 colonnes en paysage/tablette (< 1024px) ; liste
+            // verticale centrée sur mobile portrait et desktop.
+            <div ref={mealsListRef} className="space-y-3 sm:max-lg:grid sm:max-lg:grid-cols-2 sm:max-lg:gap-3 sm:max-lg:space-y-0">
               {visibleMeals.map((meal) => (
                 <MealCard
                   key={meal.id}

@@ -22,7 +22,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     // de rejouer des actions d'une famille avec la session d'un autre compte.
     const { clearQueue } = await import('../offline/queue');
     await clearQueue().catch(() => undefined);
-    await supabase.auth.signOut();
+    // Best-effort : si le compte vient d'être supprimé côté serveur (ou que
+    // le réseau est coupé), la révocation distante peut échouer — la session
+    // locale doit quand même être effacée.
+    await supabase.auth.signOut().catch(() => undefined);
     // Le cache de requêtes (mémoire + IndexedDB) est lié au compte aussi :
     // purge complète pour ne jamais afficher les données du compte
     // précédent à la connexion suivante (profil, famille, liste de courses…).

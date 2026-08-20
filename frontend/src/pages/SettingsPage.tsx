@@ -273,7 +273,7 @@ export function SettingsPage() {
     <div className="flex min-h-dvh flex-col">
       <Header title="Paramètres" subtitle="Listes et réglages de la famille" />
 
-      <main className="flex-1 space-y-4 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
+      <main className="flex-1 space-y-4 p-4 md:mx-auto md:w-full md:max-w-3xl">
         {offline && (
           <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
             ⚠️ Hors ligne : la consultation reste possible, les modifications attendent le retour de la connexion.

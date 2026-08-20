@@ -224,11 +224,13 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-dvh bg-[#FEFDF9]">
-      {/* Colonne gauche : logo + formulaire (tout le contenu sur mobile) */}
-      <div className="flex w-full flex-col px-6 py-6 sm:px-10 lg:w-[47%] lg:px-14 xl:px-20">
+      {/* Colonne gauche : logo + formulaire (tout le contenu sur mobile).
+          Paysage mobile : paddings resserrés (hauteur limitée) ; tablette
+          (≥ 768px) : vue scindée avec l'illustration à droite. */}
+      <div className="flex w-full flex-col px-6 py-6 sm:px-10 landscape:max-md:py-3 md:w-[47%] md:px-14 xl:px-20">
         <img src="/logo_horizontal_green_black.svg" alt="Bashkush" className="h-7 w-auto sm:h-8" />
 
-        <div className="flex flex-1 items-center justify-center py-10">
+        <div className="flex flex-1 items-center justify-center py-10 landscape:max-md:py-4">
           <div className="w-full max-w-md">
             {isForgot ? (
               <>
@@ -241,7 +243,7 @@ export function LoginPage() {
                 </p>
               </>
             ) : (
-              <h1 className="mb-8 text-2xl font-bold leading-snug text-stone-800">
+              <h1 className="mb-8 text-2xl font-bold leading-snug text-stone-800 landscape:max-md:mb-4">
                 {isSignup
                   ? 'Créez votre compte pour commencer à faire du '
                   : 'Veuillez vous connecter pour commencer à faire du '}
@@ -286,7 +288,7 @@ export function LoginPage() {
             {!isForgot && (
               <>
                 {/* Séparateur */}
-                <div className="relative my-6">
+                <div className="relative my-6 landscape:max-md:my-4">
                   <div className="absolute inset-0 flex items-center" aria-hidden>
                     <span className="w-full border-t border-stone-200" />
                   </div>
@@ -307,7 +309,7 @@ export function LoginPage() {
               </>
             )}
 
-            <p className="mt-8 text-center text-sm text-stone-500">
+            <p className="mt-8 text-center text-sm text-stone-500 landscape:max-md:mt-5">
               {isSignup ? (
                 <>
                   Déjà un compte?{' '}
@@ -345,8 +347,8 @@ export function LoginPage() {
       </div>
 
       {/* Colonne droite : illustration (80 % de la colonne, centrée, fond
-          visible autour) — masquée sur mobile */}
-      <div className="relative hidden flex-1 items-center justify-center lg:flex">
+          visible autour) — masquée sur mobile, visible dès la tablette */}
+      <div className="relative hidden flex-1 items-center justify-center md:flex">
         <img
           src="/logo_illustration.png"
           alt="Illustration Bashkush"

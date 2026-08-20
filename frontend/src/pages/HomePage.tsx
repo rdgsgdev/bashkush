@@ -128,7 +128,10 @@ export function HomePage() {
       />
 
       <PullToRefresh queryKeys={[['mealPlans'], ['grocery'], ['meals']]}>
-        <main className="flex-1 space-y-6 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
+        {/* Tablettes / téléphone paysage (768–1023px) : deux colonnes —
+            préparations à gauche, carrousel à droite, courses sur toute la
+            largeur. Desktop (≥ 1024px) : colonnes empilées centrées. */}
+        <main className="flex-1 space-y-6 p-4 md:mx-auto md:w-full md:max-w-3xl md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start md:max-lg:gap-6 md:max-lg:space-y-0">
           {/* Plats planifiés — à préparer (en cours d'abord, puis à faire) */}
           <section>
             <div className="mb-2 flex items-center justify-between">
@@ -187,7 +190,7 @@ export function HomePage() {
           </section>
 
           {/* Aperçu liste de courses — seule la case à cocher marque l'item acheté */}
-          <section>
+          <section className="md:max-lg:col-span-2">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
                 <ShoppingCart className="h-4 w-4 text-brand-500" /> À acheter

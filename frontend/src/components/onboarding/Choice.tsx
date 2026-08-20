@@ -13,12 +13,13 @@ interface SingleChoiceProps {
   onChange: (value: string) => void;
 }
 
-/** Cartes à choix unique (style radio) — utilisé par l'onboarding et le profil. */
+/** Cartes à choix unique (style radio) — utilisé par l'onboarding et le profil.
+ *  En paysage/tablette (≥ 640px) : grille 2 colonnes pour limiter le défilement. */
 export function SingleChoice({ legend, value, options, onChange }: SingleChoiceProps) {
   return (
     <fieldset>
       <legend className="label">{legend}</legend>
-      <div className="space-y-2">
+      <div className="space-y-2 sm:grid sm:grid-cols-2 sm:gap-2 sm:space-y-0">
         {options.map((opt) => {
           const active = value === opt.value;
           return (

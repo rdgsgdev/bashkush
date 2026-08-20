@@ -84,7 +84,8 @@ export function Modal({ open, onClose, title, children, footer, size = 'default'
       <div
         className={cn(
           'relative flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-stone-50 shadow-soft sm:rounded-2xl',
-          size === 'wide' ? 'sm:max-w-lg' : 'sm:max-w-app',
+          // Tablette (≥ 768px) : modale élargie pour profiter de la largeur.
+          size === 'wide' ? 'sm:max-w-lg md:max-w-3xl' : 'sm:max-w-app md:max-w-2xl',
         )}
       >
         <div className="flex items-center justify-between gap-3 rounded-t-2xl border-b border-stone-200 bg-white px-4 py-3">

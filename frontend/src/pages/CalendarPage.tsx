@@ -92,7 +92,9 @@ export function CalendarPage() {
       />
 
       <PullToRefresh queryKeys={[['mealPlans']]}>
-        <main className="flex-1 space-y-5 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
+        {/* Tablettes / téléphone paysage (768–1023px) : calendrier à gauche,
+            plats du jour à droite. Desktop : colonnes empilées centrées. */}
+        <main className="flex-1 space-y-5 p-4 md:mx-auto md:w-full md:max-w-3xl md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start md:max-lg:gap-6 md:max-lg:space-y-0">
           <Calendar
             activeDate={activeDate}
             onSelectDate={setDate}

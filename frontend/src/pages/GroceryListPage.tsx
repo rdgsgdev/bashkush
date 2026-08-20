@@ -291,7 +291,7 @@ export function GroceryListPage() {
           ))}
         </div>
 
-        <main className="flex-1 space-y-4 p-4 lg:mx-auto lg:w-full lg:max-w-3xl">
+        <main className="flex-1 space-y-4 p-4 md:mx-auto md:w-full md:max-w-3xl">
           {tab === 'active' ? (
             <>
               {/* Barre d'actions d'archive */}
