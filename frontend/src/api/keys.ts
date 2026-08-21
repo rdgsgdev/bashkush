@@ -13,4 +13,5 @@ export const queryKeys = {
   aiMeal: ['ai', 'meal'] as const,
   settings: ['settings'] as const,
   lists: (listKey: string) => ['lists', listKey] as const,
+  productScans: ['productScans'] as const,
 };

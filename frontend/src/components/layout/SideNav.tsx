@@ -5,6 +5,7 @@ import {
   UtensilsCrossed,
   CalendarDays,
   ShoppingCart,
+  ScanLine,
   Settings,
   LogOut,
   ChevronsLeft,
@@ -22,6 +23,7 @@ const NAV = [
   { to: '/meals', label: 'Mes plats', icon: UtensilsCrossed },
   { to: '/calendar', label: 'Calendrier', icon: CalendarDays },
   { to: '/grocery', label: 'Liste de courses', icon: ShoppingCart },
+  { to: '/analyses', label: 'Analyses', icon: ScanLine },
 ];
 
 /**

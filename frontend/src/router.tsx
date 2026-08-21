@@ -4,6 +4,7 @@ import { HomePage } from './pages/HomePage';
 import { MealsPage } from './pages/MealsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { GroceryListPage } from './pages/GroceryListPage';
+import { AnalysesPage } from './pages/AnalysesPage';
 import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -127,6 +128,7 @@ export function AppRouter() {
         <Route path="/meals" element={<MealsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/grocery" element={<GroceryListPage />} />
+        <Route path="/analyses" element={<AnalysesPage />} />
         <Route path="/profil" element={<ProfilePage />} />
         <Route path="/parametres" element={<SettingsPage />} />
       </Route>

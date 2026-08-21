@@ -12,7 +12,7 @@ import { corsOrigins } from '../config/env';
 // ─────────────────────────────────────────────────────────────
 
 /** Clés de cache frontend concernées par une invalidation (préfixes TanStack Query). */
-export type InvalidateKey = 'meals' | 'mealPlans' | 'grocery' | 'aisles' | 'family' | 'settings' | 'lists';
+export type InvalidateKey = 'meals' | 'mealPlans' | 'grocery' | 'aisles' | 'family' | 'settings' | 'lists' | 'productScans';
 
 let io: Server | null = null;
 
