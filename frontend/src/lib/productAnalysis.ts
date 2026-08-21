@@ -6,6 +6,7 @@ import type {
   ScanGrade,
 } from '../types/analysis';
 import { CRITERION_LABELS } from '../types/analysis';
+import { HIGH_RISK_ADDITIVES } from './additives';
 import { formatQty } from './utils';
 
 // ─────────────────────────────────────────────────────────────
@@ -56,19 +57,9 @@ function fruitsVegetablesPoints(pct: number | null, isBeverage: boolean): number
 }
 
 // ── Additifs ─────────────────────────────────────────────────
-// Liste locale d'additifs à risque élevé (colorants Southampton,
-// nitrites/nitrates, édulcorants controversés, BHA/BHT, dioxyde de
-// titane…) — les autres additifs comptent pour une pénalité légère.
-const HIGH_RISK_ADDITIVES = new Set([
-  'e102', 'e104', 'e110', 'e122', 'e124', 'e129', // colorants Southampton
-  'e131', 'e133', 'e143', // brillant bleu, bleu patent, vert solide
-  'e171', // dioxyde de titane
-  'e249', 'e250', 'e251', 'e252', // nitrites / nitrates
-  'e320', 'e321', // BHA / BHT
-  'e924', 'e927a', // bromates / azodicarbonamide
-  'e950', 'e951', // acésulfame K / aspartame
-]);
-
+// Le classement détaillé (fiches, niveaux de risque) vit dans
+// lib/additives — ici, seule la pénalité de score utilise le groupe
+// « à risque » (source unique : HIGH_RISK_ADDITIVES).
 const ADDITIVES_PENALTY_CAP = 40;
 const HIGH_RISK_PENALTY = 10;
 const OTHER_ADDITIVE_PENALTY = 2;

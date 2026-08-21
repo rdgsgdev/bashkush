@@ -40,6 +40,8 @@ export interface SaveProductScanInput {
   grade: ScanGrade;
   positives: AnalysisCriterion[];
   negatives: AnalysisCriterion[];
+  /** Tags additifs (« e250 », « e951 »…) : fiches détaillées dans la modale. */
+  additives?: string[];
 }
 
 export async function saveProductScan(input: SaveProductScanInput): Promise<ProductScan> {
@@ -55,6 +57,7 @@ export async function saveProductScan(input: SaveProductScanInput): Promise<Prod
     grade: input.grade,
     positives: input.positives,
     negatives: input.negatives,
+    additives: input.additives ?? null,
     scannedAt: now,
     createdAt: now,
     updatedAt: now,
@@ -91,6 +94,7 @@ export function useSaveProductScan() {
         grade: input.grade,
         positives: input.positives,
         negatives: input.negatives,
+        additives: input.additives ?? null,
         scannedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

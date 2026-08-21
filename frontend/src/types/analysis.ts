@@ -25,6 +25,19 @@ export const CRITERION_LABELS: Record<CriterionKey, string> = {
   sucres: 'Sucres',
 };
 
+/** Description courte affichée sous chaque critère du détail (ex: « Trop
+    gras », « Peu de sodium ») — dérivée du couple critère / verdict. */
+export const CRITERION_DESCRIPTIONS: Record<CriterionKey, { good: string; bad: string }> = {
+  additifs: { good: 'Sans additifs', bad: 'Additifs présents' },
+  satures: { good: 'Peu de graisses saturées', bad: 'Trop gras' },
+  bio: { good: 'Faible impact environnemental', bad: 'Impact environnemental' },
+  fruits_legumes: { good: 'Bonne quantité', bad: 'Trop peu de fruits et légumes' },
+  fibres: { good: 'Bonne quantité de fibres', bad: 'Trop peu de fibres' },
+  sodium: { good: 'Peu de sodium', bad: 'Trop salé' },
+  calories: { good: 'Faible apport calorique', bad: 'Trop calorique' },
+  sucres: { good: 'Peu de sucres', bad: 'Trop sucré' },
+};
+
 /** Un critère évalué : verdict + détail lisible (« 12 g / 100 g », « 2 additifs dont 1 à risque »). */
 export interface AnalysisCriterion {
   key: CriterionKey;
@@ -73,6 +86,9 @@ export interface ProductScan {
   grade: ScanGrade;
   positives: AnalysisCriterion[];
   negatives: AnalysisCriterion[];
+  /** Tags additifs (« e250 », « e951 »…). Absent des entrées créées avant
+      l'ajout du champ → enrichi à l'ouverture via Open Food Facts. */
+  additives?: string[] | null;
   /** Date du dernier scan (ISO) — l'affichage utilise formatRelativeScanDate. */
   scannedAt: string;
   createdAt: string;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Archive, ArchiveRestore, ShoppingCart, Trash2 } from 'lucide-react';
 import {
   DndContext,
@@ -62,6 +63,7 @@ function aisleOfOver(over: Over | null): string | null {
 
 export function GroceryListPage() {
   const [tab, setTab] = useState<'active' | 'archived'>('active');
+  const [params, setParams] = useSearchParams();
   const active = useGrocery(false);
   const archived = useGrocery(true);
 
@@ -76,6 +78,31 @@ export function GroceryListPage() {
     open: false,
     item: null,
   });
+
+  // ── Deep link ?item= : ouvre l'édition de l'article visé ────
+  // Permis depuis l'accueil (aperçu « À acheter ») ou un lien direct ;
+  // la fermeture de la modale retire le paramètre pour ne pas rouvrir.
+
+  const editParam = params.get('item');
+
+  const closeEditing = () => {
+    setEditing({ open: false, item: null });
+    if (editParam) {
+      const next = new URLSearchParams(params);
+      next.delete('item');
+      setParams(next, { replace: true });
+    }
+  };
+
+  // Ouvre l'édition dès que l'article ciblé arrive dans le cache (la
+  // requête peut être en vol à l'arrivée sur la page). Garde : pas de
+  // ré-ouverture si la modale est déjà ouverte pour ce même article.
+  useEffect(() => {
+    if (!editParam || editing.open) return;
+    const item = (active.data?.items ?? []).find((it) => it.id === editParam);
+    if (item) setEditing({ open: true, item });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editParam, active.data, editing.open]);
 
   // ── Drag & drop (onglet actif) ──────────────────────────────
 
@@ -260,20 +287,22 @@ export function GroceryListPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <Header
-        title="Liste de courses"
-        subtitle={`${activeItems.length} article${activeItems.length > 1 ? 's' : ''}`}
-        action={
-          <Button
-            onClick={() => setEditing({ open: true, item: null })}
-            className="!px-3 !py-2"
-          >
-            <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Ajouter</span>
-          </Button>
-        }
-      />
+      {/* Header + onglets dans un même bloc sticky : la barre d'onglets
+          reste visible sous le Header pendant le défilement. */}
+      <div className="sticky top-0 z-30">
+        <Header
+          title="Liste de courses"
+          subtitle={`${activeItems.length} article${activeItems.length > 1 ? 's' : ''}`}
+          action={
+            <Button
+              onClick={() => setEditing({ open: true, item: null })}
+              className="!px-3 !py-2"
+            >
+              <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Ajouter</span>
+            </Button>
+          }
+        />
 
-      <PullToRefresh queryKeys={[['grocery']]}>
         {/* Onglets */}
         <div className="flex gap-1 border-b border-stone-200 bg-white px-4">
           {(['active', 'archived'] as const).map((t) => (
@@ -290,7 +319,9 @@ export function GroceryListPage() {
             </button>
           ))}
         </div>
+      </div>
 
+      <PullToRefresh queryKeys={[['grocery']]}>
         <main className="flex-1 space-y-4 p-4 md:mx-auto md:w-full md:max-w-3xl">
           {tab === 'active' ? (
             <>
@@ -462,7 +493,7 @@ export function GroceryListPage() {
         item={editing.item}
         aisles={aisles}
         open={editing.open}
-        onClose={() => setEditing({ open: false, item: null })}
+        onClose={closeEditing}
       />
     </div>
   );

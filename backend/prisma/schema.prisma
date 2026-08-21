@@ -291,6 +291,7 @@ model ProductScan {
   grade     String // bon | moyen | mauvais | tres_mauvais | inconnu
   positives Json // qualités : [{ key, label, status, detail }]
   negatives Json // défauts : [{ key, label, status, detail }]
+  additives Json? // tags additifs Open Food Facts (["e250", "e951"]…) — null pour les anciens scans
   scannedAt DateTime @default(now()) @map("scanned_at") // dernier scan
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

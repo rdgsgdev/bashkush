@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useIsDesktop } from '../../hooks/useIsDesktop';
 
@@ -12,6 +12,36 @@ interface ModalProps {
   footer?: ReactNode;
   /** Largeur maximale personnalisée (par défaut pleine largeur mobile). */
   size?: 'default' | 'wide';
+  /** Retour arrière interne (navigation dans la modale sans la fermer) :
+      affiche une flèche retour à gauche du titre quand la vue le permet. */
+  onBack?: () => void;
+}
+
+/** Titre + bouton retour (optionnel) + bouton fermer, commun aux deux modes. */
+function ModalHeader({ title, onBack, onClose }: { title?: ReactNode; onBack?: () => void; onClose: () => void }) {
+  return (
+    <>
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="-ml-1.5 shrink-0 rounded-lg p-1.5 text-stone-500 transition hover:bg-stone-100"
+            aria-label="Retour"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
+        <h2 className="truncate text-base font-bold text-stone-800">{title}</h2>
+      </div>
+      <button
+        onClick={onClose}
+        className="shrink-0 rounded-lg p-1.5 text-stone-500 transition hover:bg-stone-100"
+        aria-label="Fermer"
+      >
+        <X className="h-5 w-5" />
+      </button>
+    </>
+  );
 }
 
 /**
@@ -23,7 +53,7 @@ interface ModalProps {
  * pas de backdrop, le scroll de la page reste libre. Si le panneau est
  * absent (page sans modale, resize…), on retombe sur l'overlay classique.
  */
-export function Modal({ open, onClose, title, children, footer, size = 'default' }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, size = 'default', onBack }: ModalProps) {
   const isDesktop = useIsDesktop();
   const [panel, setPanel] = useState<HTMLDivElement | null>(null);
 
@@ -57,14 +87,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'default'
     return createPortal(
       <div className="absolute inset-0 z-10 flex flex-col bg-stone-50">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3">
-          <h2 className="truncate text-base font-bold text-stone-800">{title}</h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-500 transition hover:bg-stone-100"
-            aria-label="Fermer"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <ModalHeader title={title} onBack={onBack} onClose={onClose} />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4">
@@ -89,14 +112,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'default'
         )}
       >
         <div className="flex items-center justify-between gap-3 rounded-t-2xl border-b border-stone-200 bg-white px-4 py-3">
-          <h2 className="truncate text-base font-bold text-stone-800">{title}</h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-500 transition hover:bg-stone-100"
-            aria-label="Fermer"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <ModalHeader title={title} onBack={onBack} onClose={onClose} />
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>

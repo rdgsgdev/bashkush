@@ -227,9 +227,28 @@ export function HomePage() {
                 <div className="relative">
                   <ul className="divide-y divide-stone-100">
                     {pendingItems.map((it) => (
-                      <li key={it.id} className="flex items-center gap-3 px-2 py-2.5">
+                      // Ligne cliquable → édition sur la page courses (même
+                      // comportement que GroceryItemRow : la ligne entière
+                      // ouvre la modale, la case à cocher reste isolée).
+                      <li
+                        key={it.id}
+                        onClick={() => navigate(`/grocery?item=${it.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            navigate(`/grocery?item=${it.id}`);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Modifier ${it.name}`}
+                        className="flex cursor-pointer items-center gap-3 px-2 py-2.5 transition hover:bg-stone-50 active:scale-[0.99]"
+                      >
                         <button
-                          onClick={() => toggleCheck.mutate(it.id)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // la ligne entière ouvre l'édition
+                            toggleCheck.mutate(it.id);
+                          }}
                           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-stone-300 text-transparent transition hover:border-brand-400 active:scale-95"
                           aria-label={`Marquer ${it.name} comme acheté`}
                         >
@@ -270,7 +289,8 @@ export function HomePage() {
               )}
             </div>
             <p className="mt-1.5 px-1 text-xs text-stone-400">
-              Cochez la case pour marquer un élément comme acheté.
+              Cochez la case pour marquer un élément comme acheté, touchez la ligne pour le
+              modifier.
             </p>
           </section>
 

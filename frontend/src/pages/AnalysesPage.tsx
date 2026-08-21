@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { History, ScanLine, SearchX } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { PullToRefresh } from '../components/common/PullToRefresh';
@@ -32,6 +32,9 @@ export function AnalysesPage() {
   const [pending, setPending] = useState<PendingScan | null>(null);
   const [detail, setDetail] = useState<ProductDetailView | null>(null);
   const detailOpen = detail !== null;
+  // Séquence d'ouvertures : une réponse OFF lente ne doit enrichir que le
+  // détail encore affiché (deux produits homonymes, fermeture rapide…).
+  const detailSeq = useRef(0);
 
   const history = useScanHistory();
   const saveScan = useSaveProductScan();
@@ -57,6 +60,8 @@ export function AnalysesPage() {
         grade: analysis.grade,
         positives: analysis.positives,
         negatives: analysis.negatives,
+        // Tags additifs (« e250 »…) : détaillés dans la modale de détail.
+        additives: product.additives,
       });
       setPending(null);
       openDetail(saved);
@@ -67,6 +72,7 @@ export function AnalysesPage() {
   }
 
   function openDetail(scan: ProductScan) {
+    const seq = ++detailSeq.current;
     setDetail({
       name: scan.name,
       brand: scan.brand,
@@ -75,19 +81,33 @@ export function AnalysesPage() {
       grade: scan.grade,
       positives: scan.positives,
       negatives: scan.negatives,
+      additives: scan.additives ?? null,
     });
+    // Anciennes entrées d'historique (avant le champ `additives`) : on
+    // recharge le produit depuis Open Food Facts pour récupérer les tags
+    // — silencieusement ignoré hors ligne / produit retiré de la base.
+    if (scan.additives == null) {
+      void getProduct(scan.barcode)
+        .then((product) => {
+          if (!product || seq !== detailSeq.current) return;
+          setDetail((d) => (d ? { ...d, additives: product.additives } : d));
+        })
+        .catch(() => undefined);
+    }
   }
 
   const scans = history.data ?? [];
 
   return (
     <div className="flex flex-1 flex-col">
-      <Header
-        title="Analyses"
-        subtitle="Scanne un produit pour analyser sa composition"
-      />
+      {/* Header + onglets dans un même bloc sticky : la barre d'onglets
+          reste visible sous le Header pendant le défilement. */}
+      <div className="sticky top-0 z-30">
+        <Header
+          title="Analyses"
+          subtitle="Scanne un produit pour analyser sa composition"
+        />
 
-      <PullToRefresh queryKeys={[['productScans']]}>
         {/* Onglets — même barre que la liste de courses */}
         <div className="flex gap-1 border-b border-stone-200 bg-white px-4">
           {(['scan', 'historique'] as const).map((t) => (
@@ -104,7 +124,9 @@ export function AnalysesPage() {
             </button>
           ))}
         </div>
+      </div>
 
+      <PullToRefresh queryKeys={[['productScans']]}>
         <main className="flex-1 space-y-4 p-4 md:mx-auto md:w-full md:max-w-3xl">
           {/* ── Onglet Scanner ── */}
           {tab === 'scan' && (

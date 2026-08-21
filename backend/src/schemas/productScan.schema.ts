@@ -22,5 +22,8 @@ export const createProductScanSchema = z.object({
   grade: z.enum(['bon', 'moyen', 'mauvais', 'tres_mauvais', 'inconnu']),
   positives: z.array(analysisCriterionSchema),
   negatives: z.array(analysisCriterionSchema),
+  // Tags additifs normalisés (« e250 », « e951 »…) : la base de fiches
+  // détaillées vit côté client. Optionnel (clients antérieurs / file offline).
+  additives: z.array(z.string().min(1).max(20)).optional(),
 });
 export type CreateProductScanInput = z.infer<typeof createProductScanSchema>;
