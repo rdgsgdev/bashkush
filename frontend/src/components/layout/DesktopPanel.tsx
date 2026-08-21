@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom';
 import {
   CalendarDays,
   PanelRight,
+  ScanLine,
   ShoppingCart,
   UtensilsCrossed,
 } from 'lucide-react';
@@ -25,6 +26,12 @@ const HINTS = [
     icon: ShoppingCart,
     title: 'Article de la liste',
     text: 'Sélectionnez un article pour le modifier (quantité, rayon, magasin…).',
+  },
+  {
+    path: '/analyses',
+    icon: ScanLine,
+    title: 'Analyse d’un produit',
+    text: 'Scannez un code-barres ou sélectionnez un produit de l’historique pour afficher son analyse détaillée.',
   },
 ];
 

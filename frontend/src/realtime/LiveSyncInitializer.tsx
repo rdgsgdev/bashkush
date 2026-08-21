@@ -7,7 +7,7 @@ import { queryClient } from '../queryClient';
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 // Préfixes de clés de cache que le serveur est autorisé à invalider.
-const VALID_KEYS = new Set(['meals', 'mealPlans', 'grocery', 'aisles', 'family', 'settings', 'lists']);
+const VALID_KEYS = new Set(['meals', 'mealPlans', 'grocery', 'aisles', 'family', 'settings', 'lists', 'productScans']);
 
 /**
  * Synchronisation temps réel (Socket.io) :

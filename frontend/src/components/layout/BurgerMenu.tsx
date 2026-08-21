@@ -1,4 +1,4 @@
-import { Home, UtensilsCrossed, CalendarDays, ShoppingCart, Settings, LogOut } from 'lucide-react';
+import { Home, UtensilsCrossed, CalendarDays, ShoppingCart, ScanLine, Settings, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/meals', label: 'Mes plats', icon: UtensilsCrossed },
   { to: '/calendar', label: 'Calendrier', icon: CalendarDays },
   { to: '/grocery', label: 'Liste de courses', icon: ShoppingCart },
+  { to: '/analyses', label: 'Analyses', icon: ScanLine },
 ];
 
 export function BurgerMenu() {

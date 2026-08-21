@@ -37,6 +37,34 @@ export function formatShortDate(value: string | Date): string {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+/**
+ * Temps relatif d'un scan : « À l'instant », « Il y a 2 h », « Hier »,
+ * « Il y a 2 jours », « La semaine dernière », « Le mois dernier »,
+ * « Il y a 4 mois », « L'année dernière », « Il y a 3 ans »…
+ */
+export function formatRelativeScanDate(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return 'À l\u2019instant';
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'À l\u2019instant';
+  if (minutes < 60) return `Il y a ${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Il y a ${hours} h`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Hier';
+  if (days < 7) return `Il y a ${days} jours`;
+  if (days < 14) return 'La semaine dernière';
+  if (days < 30) return `Il y a ${Math.floor(days / 7)} semaines`;
+  if (days < 60) return 'Le mois dernier';
+  if (days < 365) return `Il y a ${Math.floor(days / 30)} mois`;
+  if (days < 730) return 'L\u2019année dernière';
+  return `Il y a ${Math.floor(days / 365)} ans`;
+}
+
 // ── Quantités / formatage ───────────────────────────────────
 
 /** Affiche proprement une quantité (1 au lieu de 1.0). */

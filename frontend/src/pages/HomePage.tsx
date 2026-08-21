@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronDown, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed } from 'lucide-react';
+import { ChevronRight, ChevronDown, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed, ScanLine } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { PullToRefresh } from '../components/common/PullToRefresh';
 import { MealCarousel } from '../components/meals/MealCarousel';
@@ -272,6 +272,25 @@ export function HomePage() {
             <p className="mt-1.5 px-1 text-xs text-stone-400">
               Cochez la case pour marquer un élément comme acheté.
             </p>
+          </section>
+
+          {/* Raccourci analyse de produits — scan code-barres (score, qualités, défauts) */}
+          <section className="md:max-lg:col-span-2">
+            <button
+              onClick={() => navigate('/analyses')}
+              className="flex w-full items-center gap-4 rounded-2xl bg-brand-500 p-4 text-left text-white shadow-card transition active:scale-[0.99]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                <ScanLine className="h-6 w-6" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold">Analyser un produit</span>
+                <span className="block text-xs text-white/80">
+                  Scanne un code-barres pour découvrir son score et ses qualités et défauts.
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-white/70" />
+            </button>
           </section>
         </main>
       </PullToRefresh>

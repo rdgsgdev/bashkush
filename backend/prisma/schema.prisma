@@ -81,6 +81,7 @@ model Family {
   meals        Meal[]
   mealPlans    MealPlan[]
   groceryItems GroceryItem[]
+  productScans ProductScan[]
   listOptions  ListOption[]
 
   @@map("families")
@@ -271,6 +272,34 @@ model GroceryAisle {
   isDefault Boolean @default(false) @map("is_default")
 
   @@map("grocery_aisles")
+}
+
+// ── Analyse de produits (scan code-barres) ───────────────────
+// Historique des produits scannés, scopé à la famille (partagé
+// entre membres). Un produit par code-barres : re-scanner met à
+// jour l'analyse (snapshot calculé côté client) et la date de scan.
+// score null → données nutritionnelles insuffisantes.
+
+model ProductScan {
+  id        String   @id @default(uuid())
+  familyId  String   @map("family_id")
+  barcode   String // code-barres (EAN-8 / EAN-13 / UPC)
+  name      String
+  brand     String? // marque(s), séparées par des virgules (Open Food Facts)
+  imageUrl  String?  @map("image_url") // image du produit (hébergée par Open Food Facts)
+  score     Int? // note /100 (null si données insuffisantes)
+  grade     String // bon | moyen | mauvais | tres_mauvais | inconnu
+  positives Json // qualités : [{ key, label, status, detail }]
+  negatives Json // défauts : [{ key, label, status, detail }]
+  scannedAt DateTime @default(now()) @map("scanned_at") // dernier scan
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id])
+
+  @@unique([familyId, barcode])
+  @@index([familyId, scannedAt])
+  @@map("product_scans")
 }
 
 // Job de génération de plat par IA : la génération continue côté
