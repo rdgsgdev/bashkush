@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed } from 'lucide-react';
+import { ChevronRight, ChevronDown, ShoppingCart, ChefHat, Check, CalendarDays, UtensilsCrossed } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { PullToRefresh } from '../components/common/PullToRefresh';
 import { MealCarousel } from '../components/meals/MealCarousel';
@@ -9,6 +9,7 @@ import { MealDetailsModal } from '../components/modals/MealDetailsModal';
 import { EmptyState, ErrorState, FullScreenLoader } from '../components/ui/Feedback';
 import { useGrocery, useToggleCheck } from '../api/grocery';
 import { useMealPlans } from '../api/mealPlans';
+import { useUiStore } from '../store/uiStore';
 import { todayValue, parseDate, formatShortDate, aisleColor, cn } from '../lib/utils';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { AISLE_LABELS, STATUS_LABELS } from '../types';
@@ -22,6 +23,9 @@ const STATUS_COLORS: Record<MealPlanStatus, string> = {
 };
 
 const MAX_PER_GROUP = 4;
+/** Aperçu « À acheter » : nombre d'items non cochés affichés avant de
+    devoir charger la liste complète (fondu + bouton « Tout afficher »). */
+const MAX_GROCERY_PREVIEW = 6;
 
 /** Tri par date « du » la plus proche de la date courante (passée ou future). */
 function byClosenessToToday(a: MealPlan, b: MealPlan): number {
@@ -82,6 +86,10 @@ export function HomePage() {
   const isDesktop = useIsDesktop();
   const grocery = useGrocery(false);
   const toggleCheck = useToggleCheck();
+  // Mémoire de session : une fois la liste complète chargée, elle le reste
+  // (même en arrière-plan ou en naviguant ailleurs) jusqu'à la fermeture de l'app.
+  const groceryPreviewExpanded = useUiStore((s) => s.groceryPreviewExpanded);
+  const expandGroceryPreview = useUiStore((s) => s.expandGroceryPreview);
   const plansQuery = useMealPlans();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -100,7 +108,10 @@ export function HomePage() {
   }, [plansQuery.data]);
 
   const selectedPlan = plansQuery.data?.find((p) => p.id === selectedPlanId) ?? null;
-  const pendingItems = (grocery.data?.items ?? []).filter((it) => !it.checked).slice(0, 6);
+  const allPendingItems = (grocery.data?.items ?? []).filter((it) => !it.checked);
+  const isTruncated = !groceryPreviewExpanded && allPendingItems.length > MAX_GROCERY_PREVIEW;
+  const pendingItems = isTruncated ? allPendingItems.slice(0, MAX_GROCERY_PREVIEW) : allPendingItems;
+  const hiddenCount = allPendingItems.length - MAX_GROCERY_PREVIEW;
 
   const openPlan = (plan: MealPlan) => {
     // Desktop : le clic mène à la page calendrier (centre) avec les détails
@@ -213,31 +224,49 @@ export function HomePage() {
                   description="Votre liste de courses est à jour."
                 />
               ) : (
-                <ul className="divide-y divide-stone-100">
-                  {pendingItems.map((it) => (
-                    <li key={it.id} className="flex items-center gap-3 px-2 py-2.5">
+                <div className="relative">
+                  <ul className="divide-y divide-stone-100">
+                    {pendingItems.map((it) => (
+                      <li key={it.id} className="flex items-center gap-3 px-2 py-2.5">
+                        <button
+                          onClick={() => toggleCheck.mutate(it.id)}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-stone-300 text-transparent transition hover:border-brand-400 active:scale-95"
+                          aria-label={`Marquer ${it.name} comme acheté`}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">
+                          {it.name}
+                        </span>
+                        <span className="shrink-0 text-xs text-stone-400">
+                          {it.quantity} {it.unit}
+                        </span>
+                        <StoreLogo store={it.store} />
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${aisleColor(it.aisle)}`}
+                        >
+                          {AISLE_LABELS[it.aisle] ?? it.aisle}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* Liste incomplète : fondu blanc + flou sur les derniers
+                      éléments visibles. L'overlay capte les clics : les
+                      éléments floutés ne sont pas cochables, seul le bouton
+                      permet de charger la liste complète. */}
+                  {isTruncated && (
+                    <div className="absolute inset-x-0 bottom-0 flex h-20 items-end justify-center bg-gradient-to-t from-white via-white/70 to-transparent pb-2 backdrop-blur-[2px]">
                       <button
-                        onClick={() => toggleCheck.mutate(it.id)}
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-stone-300 text-transparent transition hover:border-brand-400 active:scale-95"
-                        aria-label={`Marquer ${it.name} comme acheté`}
+                        type="button"
+                        onClick={expandGroceryPreview}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3.5 py-2 text-xs font-semibold text-white shadow-soft transition active:scale-95"
                       >
-                        <Check className="h-4 w-4" />
+                        <ChevronDown className="h-3.5 w-3.5" />
+                        Tout afficher (+{hiddenCount})
                       </button>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">
-                        {it.name}
-                      </span>
-                      <span className="shrink-0 text-xs text-stone-400">
-                        {it.quantity} {it.unit}
-                      </span>
-                      <StoreLogo store={it.store} />
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${aisleColor(it.aisle)}`}
-                      >
-                        {AISLE_LABELS[it.aisle] ?? it.aisle}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <p className="mt-1.5 px-1 text-xs text-stone-400">
