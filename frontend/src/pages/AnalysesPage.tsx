@@ -9,7 +9,7 @@ import { ScanHistoryCard } from '../components/analysis/ScanHistoryCard';
 import { ProductDetailModal, type ProductDetailView } from '../components/analysis/ProductDetailModal';
 import { useDeleteProductScan, useSaveProductScan, useScanHistory } from '../api/analyses';
 import { getProduct } from '../lib/openFoodFacts';
-import { getCosmeticProduct } from '../lib/openBeautyFacts';
+import { resolveCosmeticProduct } from '../lib/cosmeticSources';
 import { analyzeProduct } from '../lib/productAnalysis';
 import { analyzeCosmeticProduct } from '../lib/cosmeticAnalysis';
 import type { ProductScan } from '../types/analysis';
@@ -43,12 +43,12 @@ export function AnalysesPage() {
   const saveScan = useSaveProductScan();
   const deleteScan = useDeleteProductScan();
 
-  // ── Flux de scan : décodage → OFF/OBF → analyse → sauvegarde ──
+  // ── Flux de scan : décodage → OFF/OBF+OPF → analyse → sauvegarde ──
   async function handleBarcode(barcode: string) {
     setPending({ status: 'analyzing', barcode });
     try {
-      // Alimentaire d'abord (Open Food Facts), puis cosmétique
-      // (Open Beauty Facts) si le code-barres y est inconnu.
+      // Alimentaire d'abord (Open Food Facts), puis cosmétique (Open
+      // Beauty Facts, complété par Open Products Facts) si inconnu.
       const food = await getProduct(barcode);
       if (food) {
         const analysis = analyzeProduct(food);
@@ -71,7 +71,7 @@ export function AnalysesPage() {
         return;
       }
 
-      const cosmetic = await getCosmeticProduct(barcode);
+      const cosmetic = await resolveCosmeticProduct(barcode);
       if (cosmetic) {
         const analysis = analyzeCosmeticProduct(cosmetic);
         const saved = await saveScan.mutateAsync({
@@ -95,7 +95,7 @@ export function AnalysesPage() {
 
       setPending({ status: 'notfound', barcode });
     } catch {
-      // Erreur réseau vers OFF/OBF (hors ligne, timeout…).
+      // Erreur réseau vers OFF/OBF/OPF (hors ligne, timeout…).
       setPending({ status: 'error', barcode });
     }
   }
@@ -118,14 +118,19 @@ export function AnalysesPage() {
     // recharge le produit depuis la base adaptée pour récupérer les tags
     // — silencieusement ignoré hors ligne / produit retiré de la base.
     if (scan.additives == null) {
-      const fetcher = (scan.productType ?? 'food') === 'food' ? getProduct : getCosmeticProduct;
-      void fetcher(scan.barcode)
-        .then((product) => {
+      void (async () => {
+        try {
+          const product =
+            (scan.productType ?? 'food') === 'food'
+              ? await getProduct(scan.barcode)
+              : await resolveCosmeticProduct(scan.barcode);
           if (!product || seq !== detailSeq.current) return;
           const composition = 'additives' in product ? product.additives : product.ingredients;
           setDetail((d) => (d ? { ...d, composition } : d));
-        })
-        .catch(() => undefined);
+        } catch {
+          // Hors ligne ou base injoignable : détail sans composition.
+        }
+      })();
     }
   }
 
@@ -179,8 +184,8 @@ export function AnalysesPage() {
                   <div>
                     <p className="font-semibold text-stone-700">Produit introuvable</p>
                     <p className="mt-1 text-sm text-stone-500">
-                      Le code {pending.barcode} n'est ni dans la base Open Food Facts (alimentaire)
-                      ni dans Open Beauty Facts (cosmétique).
+                      Le code {pending.barcode} n'est dans aucune base connue : Open Food Facts
+                      (alimentaire), Open Beauty Facts ni Open Products Facts (cosmétiques).
                     </p>
                   </div>
                   <Button variant="secondary" onClick={() => setPending(null)}>
@@ -191,7 +196,7 @@ export function AnalysesPage() {
 
               {pending?.status === 'error' && (
                 <>
-                  <ErrorState message="Impossible de joindre Open Food Facts / Open Beauty Facts. Vérifie ta connexion puis réessaie." />
+                  <ErrorState message="Impossible de joindre les bases de produits (Open Food Facts / Open Beauty Facts). Vérifie ta connexion puis réessaie." />
                   <div className="flex justify-center">
                     <Button variant="secondary" onClick={() => handleBarcode(pending.barcode)}>
                       Réessayer

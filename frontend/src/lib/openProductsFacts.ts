@@ -1,14 +1,17 @@
 import axios from 'axios';
 import type { CosmeticProduct } from '../types/analysis';
+import { normalizeIngredientTags } from './openBeautyFacts';
 
 // ─────────────────────────────────────────────────────────────
-// Client Open Beauty Facts — base ouverte des cosmétiques (même
-// plateforme / API qu'Open Food Facts, gratuite, sans clé). Un
-// code-barres absent d'OFF y est résolu en ingrédients INCI.
+// Client Open Products Facts — base ouverte « tous produits » de
+// la même plateforme qu'Open Food Facts / Open Beauty Facts
+// (gratuite, sans clé, même API v2). Beaucoup de cosmétiques
+// (crèmes, lotions, eaux nettoyantes…) y figurent sans être dans
+// Open Beauty Facts : c'est notre second canal de résolution.
 // ─────────────────────────────────────────────────────────────
 
-const obfApi = axios.create({
-  baseURL: 'https://world.openbeautyfacts.org',
+const opfApi = axios.create({
+  baseURL: 'https://world.openproductsfacts.org',
   timeout: 15_000,
   headers: { Accept: 'application/json' },
 });
@@ -23,40 +26,22 @@ const FIELDS = [
   'ingredients_tags',
 ].join(',');
 
-/** Slugifie un tag INCI : « en:Alcohol Denat » → « alcohol-denat »
-    (les préfixes de langue autre que « en: » sont aussi retirés). */
-export function slugifyTag(tag: string): string {
-  return tag
-    .replace(/^[a-z]{2}:/, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+// Indices « produit non alimentaire / beauté » : un produit OPF n'est
+// retenu comme cosmétique que s'il en porte un OU s'il a une composition.
+// OPF mélange tout : sans ce filtre, un aliment absent d'OFF mais présent
+// dans OPF serait analysé comme cosmétique.
+const NON_FOOD_CATEGORY_RE = /cosmetic|beauty|non-food|open-beauty|personal-care|hygiene|perfume|skin|hair|soap|make-up|makeup|shav|dental|bath/i;
+
+function looksCosmetic(categoriesTags: string[], hasIngredients: boolean): boolean {
+  return hasIngredients || categoriesTags.some((t) => NON_FOOD_CATEGORY_RE.test(t));
 }
 
-/** Tags INCI bruts → slugs dédupliqués (fragments du parseur ignorés
-    au matching par simple non-correspondance). */
-export function normalizeIngredientTags(tags: string[]): string[] {
-  return [
-    ...new Set(
-      tags
-        .map(slugifyTag)
-        .filter((slug) => slug.length > 1),
-    ),
-  ];
-}
-
-const PARFUM_TAGS = new Set(['parfum', 'fragrance', 'parfum-fragrance']);
-
-/** Le tag INCI désigne-t-il le parfum (déclaré à part sur l'emballage) ? */
-export function isParfumTag(slug: string): boolean {
-  return PARFUM_TAGS.has(slug);
-}
-
-function normalizeProduct(barcode: string, p: Record<string, unknown>): CosmeticProduct {
+function normalizeProduct(barcode: string, p: Record<string, unknown>): CosmeticProduct | null {
   const labelsTags = (p.labels_tags as string[] | undefined) ?? [];
-
+  const categoriesTags = (p.categories_tags as string[] | undefined) ?? [];
   const ingredients = normalizeIngredientTags((p.ingredients_tags as string[] | undefined) ?? []);
+
+  if (!looksCosmetic(categoriesTags, ingredients.length > 0)) return null;
 
   return {
     barcode,
@@ -72,14 +57,15 @@ function normalizeProduct(barcode: string, p: Record<string, unknown>): Cosmetic
 }
 
 /**
- * Récupère un cosmétique par code-barres.
- * Renvoie `null` si le produit est absent de la base (status 0 ou 404) ;
- * remonte les erreurs réseau à l'appelant (affichage réessayable).
+ * Récupère un produit OPF par code-barres, s'il peut s'agir d'un
+ * cosmétique (composition présente ou catégorie beauté/non-alimentaire).
+ * Renvoie `null` si absent (status 0 / 404) ou s'il s'agit visiblement
+ * d'un produit alimentaire ; remonte les erreurs réseau.
  */
-export async function getCosmeticProduct(barcode: string): Promise<CosmeticProduct | null> {
+export async function getOpenProduct(barcode: string): Promise<CosmeticProduct | null> {
   let data: { status?: number; product?: Record<string, unknown> };
   try {
-    const res = await obfApi.get(`/api/v2/product/${encodeURIComponent(barcode)}.json`, {
+    const res = await opfApi.get(`/api/v2/product/${encodeURIComponent(barcode)}.json`, {
       params: { fields: FIELDS },
     });
     data = res.data;

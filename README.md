@@ -123,7 +123,7 @@ L'application reste consultable et en partie modifiable **sans réseau** ou pend
 ### Analyse de produits (façon Yuka, calcul 100 % côté client)
 
 - **Alimentaire** (`lib/productAnalysis`) : base Nutri-Score mappée /100, repli sur le Nutri-Score officiel OFF quand les nutriments sont incomplets (score estimé, signalé), pénalités additifs / NOVA 4 / huile de palme, bonus bio / Éco-Score A-B. Critères affichés : calories, sucres, graisses saturées, sodium, fibres, protéines, fruits & légumes, degré de transformation (NOVA), huile de palme, Éco-Score, bio, additifs.
-- **Cosmétique** (`lib/cosmeticAnalysis`) : la composition INCI fournie par Open Beauty Facts est confrontée à une base locale (~130 ingrédients + motifs PEG/parabens/EDTA/siloxanes, sources CosIng·ANSES·ECHA·CIR) ; pénalités par ingrédient controversé, bonus bio, critères parfum/allergènes/vegan.
+- **Cosmétique** (`lib/cosmeticAnalysis`) : résolution multi-sources — Open Beauty Facts puis **Open Products Facts** en repli/complément (`lib/cosmeticSources`, crèmes, lotions et eaux nettoyantes souvent absentes d'OBF) ; la composition INCI est confrontée à une base locale (~180 ingrédients + motifs PEG/parabens/EDTA/siloxanes/huiles/extraits, codes E délégués à la base additifs ; sources CosIng·ANSES·ECHA·CIR) ; pénalités par ingrédient controversé, bonus bio, critères parfum/allergènes/vegan.
 - **Base additifs** (`lib/additives`) : ~320 fiches couvrant quasi intégralement E100–E1520 (sources OFF·EFSA·ANSES·CIRC·règlement UE 1129/2011), variantes résolues vers la fiche de base (`E322i` → lécithines).
 - Les scans sont stockés en base (table `product_scans`, colonne `product_type` = `food`|`cosmetic`). Après toute évolution du schéma Prisma : `npx prisma db push` (backend).
 

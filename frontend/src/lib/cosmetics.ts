@@ -2,15 +2,19 @@
 // Base locale des ingrédients cosmétiques INCI (données ouvertes).
 //
 // Sources : portail CosIng de la Commission européenne (statut
-// réglementaire UE 1223/2009, restrictions), avis ANSES et ECHA,
-// évaluations du CIR (Cosmetic Ingredient Review) et publications
-// du CIRC. Consultées en août 2026.
+// réglementaire UE 1223/2009, restrictions, allergènes à déclaration
+// obligatoire), avis ANSES et ECHA, évaluations du CIR (Cosmetic
+// Ingredient Review) et publications du CIRC. Consultées en août 2026.
 //
-// Couverture : ~130 ingrédients INCI courants + motifs génériques
-// (PEG-x, *-paraben, *-EDTA, benzophénone-x, siloxanes). Un INCI
-// absent de la base est considéré sans signalement connu (pas de
-// pénalité) — l'inverse serait injuste : la plupart des INCI sont
-// bénins et inconnus ≠ controversé.
+// Couverture : ~180 ingrédients INCI courants (crèmes, lotions, eaux
+// nettoyantes, solaires, capillaires…) + motifs génériques (PEG-x,
+// *-paraben, *-EDTA, benzophénone-x, siloxanes, huiles végétales,
+// extraits, éthoxylés…) ; les codes E rencontrés dans les
+// compositions (Open Products Facts) sont délégués à la base des
+// additifs alimentaires (lib/additives). Un INCI absent de la base
+// est considéré sans signalement connu (pas de pénalité) — l'inverse
+// serait injuste : la plupart des INCI sont bénins et inconnu ≠
+// controversé.
 //
 // Classification en 3 niveaux comme les additifs :
 // - sans risque : sûr en usage cosmétique topique ;
@@ -24,6 +28,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import type { AdditiveRisk } from './additives';
+import { getAdditiveInfo } from './additives';
 
 export type CosmeticRisk = AdditiveRisk;
 
@@ -59,6 +64,12 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: '2-bromo-2-nitropropane-1-3-diol', name: 'Bronopol (2-bromo-2-nitropropane-1,3-diol)', func: 'Conservateur', risk: 'a_risque', description: 'Libérateur de formaldéhyde pouvant en outre former des nitrosamines avec certains ingrédients aminés.', risks: ['Libère du formaldéhyde', 'Formation possible de nitrosamines'] },
   { code: 'sodium-hydroxymethylglycinate', name: 'Sodium hydroxymethylglycinate', func: 'Conservateur', risk: 'risque_limite', description: 'Libérateur discret de formaldéhyde, souvent présenté à tort comme « doux ».', risks: ['Libère de faibles quantités de formaldéhyde'] },
   { code: 'chlorphenesin', name: 'Chlorphenesin', func: 'Conservateur', risk: 'risque_limite', description: 'Conservateur autorisé à faible dose (0,3 %) dans l’UE.', risks: ['Concentration limitée par la réglementation UE'] },
+  { code: 'iodopropynyl-butylcarbamate', name: 'Iodopropynyl Butylcarbamate (IPBC)', func: 'Conservateur', risk: 'risque_limite', description: 'Antifongique restreint dans l’UE (interdit sur les lèvres et en aérosol, dose faible ailleurs).', risks: ['Restrictions UE (lèvres, inhalation)', 'Concentration limitée'] },
+  { code: 'methyldibromo-glutaronitrile', name: 'Methyldibromo Glutaronitrile (MDBGN)', func: 'Conservateur', risk: 'a_risque', description: 'Conservateur retiré des cosmétiques UE (2015) après une vague d’allergies de contact.', risks: ['Allergisant cutané fort', 'Interdit dans les cosmétiques UE'] },
+  { code: 'benzisothiazolinone', name: 'Benzisothiazolinone (BIT)', func: 'Conservateur', risk: 'a_risque', description: 'Conservateur de la famille des isothiazolinones : fort allergisant, interdit dans les cosmétiques UE (réservé aux usages industriels).', risks: ['Allergisant cutané fort', 'Interdit dans les cosmétiques UE'] },
+  { code: 'chlorhexidine-digluconate', name: 'Chlorhexidine digluconate', func: 'Antiseptique / Conservateur', risk: 'risque_limite', description: 'Antiseptique efficace ; allergies rares mais documentées (regroupées par l’ANSM).', risks: ['Allergies rares rapportées (ANSM)'] },
+  { code: 'sodium-metabisulfite', name: 'Metabisulfite de sodium', func: 'Antioxydant', risk: 'risque_limite', description: 'Antioxydant de la famille des sulfites : allergène à étiquetage obligatoire.', risks: ['Allergène sulfite (étiquetage obligatoire)', 'Crises d’asthme chez les personnes sensibles'] },
+  { code: 'sodium-sulfite', name: 'Sulfite de sodium', func: 'Antioxydant', risk: 'risque_limite', description: 'Antioxydant de la famille des sulfites, même réserve que le metabisulfite.', risks: ['Allergène sulfite (étiquetage obligatoire)'] },
   { code: 'sodium-benzoate', name: 'Benzoate de sodium', func: 'Conservateur', risk: 'sans_risque', description: 'Conservateur classique également utilisé en alimentaire, bien toléré en application cutanée.', risks: [] },
   { code: 'potassium-sorbate', name: 'Sorbate de potassium', func: 'Conservateur', risk: 'sans_risque', description: 'Conservateur doux issu de l’acide sorbique (baies de sorbier).', risks: [] },
   { code: 'dehydroacetic-acid', name: 'Acide déhydroacétique', func: 'Conservateur', risk: 'sans_risque', description: 'Conservateur autorisé en bio, souvent associé au benzoate de sodium.', risks: [] },
@@ -83,6 +94,13 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: 'sodium-cocoyl-isethionate', name: 'Sodium Cocoyl Isethionate', func: 'Tensioactif doux', risk: 'sans_risque', description: 'Tensioactif doux (« savon sans savon ») des barres nettoyantes.', risks: [] },
   { code: 'cocamidopropyl-betaine', name: 'Cocamidopropyl Betaine', func: 'Co-tensioactif', risk: 'risque_limite', description: 'Co-tensioactif amphotère très répandu ; quelques allergies de contact rapportées (impuretés de fabrication).', risks: ['Allergies de contact rapportées (impuretés)'] },
   { code: 'sodium-cocoyl-glutamate', name: 'Sodium Cocoyl Glutamate', func: 'Tensioactif doux', risk: 'sans_risque', description: 'Tensioactif doux à base d’acides aminés.', risks: [] },
+  { code: 'caprylyl-capryl-glucoside', name: 'Caprylyl/Capryl Glucoside', func: 'Tensioactif doux', risk: 'sans_risque', description: 'Tensioactif non ionique doux des eaux micellaires et nettoyants sensibles.', risks: [] },
+  { code: 'coco-betaine', name: 'Coco Betaine', func: 'Co-tensioactif', risk: 'sans_risque', description: 'Co-tensioactif amphotère dérivé du coco, plus doux que la version amidopropyle.', risks: [] },
+  { code: 'sodium-lauroyl-sarcosinate', name: 'Sodium Lauroyl Sarcosinate', func: 'Tensioactif doux', risk: 'sans_risque', description: 'Tensioactif moussant doux (dentifrices, nettoyants).', risks: [] },
+  { code: 'sodium-lauroyl-glutamate', name: 'Sodium Lauroyl Glutamate', func: 'Tensioactif doux', risk: 'sans_risque', description: 'Tensioactif doux à base d’acide aminé (nettoyants visage).', risks: [] },
+  { code: 'disodium-cocoyl-glutamate', name: 'Disodium Cocoyl Glutamate', func: 'Tensioactif doux', risk: 'sans_risque', description: 'Tensioactif doux à base d’acide aminé.', risks: [] },
+  { code: 'poloxamer-184', name: 'Poloxamer 184', func: 'Solubilisant', risk: 'sans_risque', description: 'Solubilisant doux des eaux micellaires (blocs polymères de synthèse inerts).', risks: [] },
+  { code: 'poloxamer-407', name: 'Poloxamer 407', func: 'Solubilisant / Épaississant', risk: 'sans_risque', description: 'Polymère solubilisant et gélifiant (bains de bouche, micellaires).', risks: [] },
 
   // ── Antimicrobiens controversés ────────────────────────────
   { code: 'triclosan', name: 'Triclosan', func: 'Antibactérien', risk: 'a_risque', description: 'Antibactérien restreint dans l’UE (dentifrices, savons) : perturbation endocrinienne suspectée et contribution à la résistance aux antibiotiques.', risks: ['Perturbation endocrinienne suspectée', 'Contribution à la résistance bactérienne', 'Usage très restreint dans l’UE'] },
@@ -112,6 +130,8 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: 'dimethiconol', name: 'Dimethiconol', func: 'Silicone', risk: 'sans_risque', description: 'Silicone linéaire épaississant (soins capillaires).', risks: [] },
   { code: 'silica-dimethyl-silylate', name: 'Silica dimethyl silylate', func: 'Silicone / Texture', risk: 'sans_risque', description: 'Silice modifiée, agent de texture inerte.', risks: [] },
   { code: 'amodimethicone', name: 'Amodimethicone', func: 'Silicone capillaire', risk: 'sans_risque', description: 'Silicone conditionneur des shampoings/soins, non accumulatif.', risks: [] },
+  { code: 'phenyl-trimethicone', name: 'Phenyl Trimethicone', func: 'Silicone', risk: 'sans_risque', description: 'Silicone brillance et protection (cheveux, lèvres).', risks: [] },
+  { code: 'trimethylsiloxysilicate', name: 'Trimethylsiloxysilicate', func: 'Silicone filmogène', risk: 'sans_risque', description: 'Silicone filmogène longue tenue (maquillage, solaires).', risks: [] },
 
   // ── Pétrochimie ────────────────────────────────────────────
   { code: 'paraffinum-liquidum', name: 'Huile minérale (Paraffinum liquidum)', func: 'Émollient', risk: 'risque_limite', description: 'Huile minérale raffinée ; occlusive et efficace mais d’origine pétrochimique — la pureté pharmaceutique est encadrée, les grades techniques posent question.', risks: ['Origine pétrochimique', 'Effet occlusif (peaux acnéiques)'] },
@@ -122,6 +142,7 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
 
   // ── Humectants et solvants ─────────────────────────────────
   { code: 'aqua', name: 'Aqua (eau)', func: 'Solvant', risk: 'sans_risque', description: 'Eau purifiée, base de la plupart des formules.', risks: [] },
+  { code: 'water', name: 'Eau (water/aqua)', func: 'Solvant', risk: 'sans_risque', description: 'Eau purifiée — Open Products Facts la nomme « water », la nomenclature INCI « aqua ».', risks: [] },
   { code: 'glycerin', name: 'Glycérine', func: 'Humectant', risk: 'sans_risque', description: 'Humectant référence : attire et retient l’eau dans la peau.', risks: [] },
   { code: 'propylene-glycol', name: 'Propylène glycol', func: 'Humectant', risk: 'risque_limite', description: 'Humectant très répandu ; irritation possible chez les peaux sensibles, doses limitées pour les enfants dans l’UE.', risks: ['Irritation possible (peaux sensibles)', 'Concentrations encadrées pour l’enfant (UE)'] },
   { code: 'butylene-glycol', name: 'Butylene glycol', func: 'Humectant', risk: 'sans_risque', description: 'Humectant/solvant mieux toléré que le propylène glycol.', risks: [] },
@@ -130,6 +151,14 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: 'caprylyl-glycol', name: 'Caprylyl glycol', func: 'Humectant', risk: 'sans_risque', description: 'Humectant doux aux propriétés conservatrices.', risks: [] },
   { code: 'ethylhexylglycerin', name: 'Ethylhexylglycerin', func: 'Booster de conservation', risk: 'sans_risque', description: 'Co-conservateur courant, généralement bien toléré (irritation rare).', risks: [] },
   { code: 'alcohol-denat', name: 'Alcohol denat', func: 'Solvant', risk: 'risque_limite', description: 'Alcool dénaturé : asséchant et irritant à forte concentration, utile aux textures légères et aux formules sans conservateurs classiques.', risks: ['Assèchement cutané à forte dose', 'Irritation des peaux sensibles'] },
+  { code: 'alcohol', name: 'Alcool (éthanol)', func: 'Solvant', risk: 'risque_limite', description: 'Éthanol non dénaturé (toniques, eaux de toilette) : asséchant à forte concentration.', risks: ['Assèchement cutané à forte dose'] },
+  { code: 'propanediol', name: 'Propanediol', func: 'Humectant', risk: 'sans_risque', description: 'Humectant d’origine naturelle (maïs), alternative bien tolérée au propylène glycol.', risks: [] },
+  { code: 'methylpropanediol', name: 'Methylpropanediol', func: 'Humectant', risk: 'sans_risque', description: 'Humectant/solvant doux, améliore la pénétration des actifs.', risks: [] },
+  { code: 'urea', name: 'Urée', func: 'Humectant / Kératolytique', risk: 'sans_risque', description: 'Humectant naturel qui retient l’eau et lisse les rugosités (peaux très sèches, pieds).', risks: [] },
+  { code: 'sodium-citrate', name: 'Citrate de sodium', func: 'Tampon pH', risk: 'sans_risque', description: 'Sel de l’acide citrique, régule le pH des émulsions.', risks: [] },
+  { code: 'potassium-phosphate', name: 'Phosphate de potassium', func: 'Tampon pH', risk: 'sans_risque', description: 'Tampon pH inerte.', risks: [] },
+  { code: 'sodium-phosphate', name: 'Phosphate de sodium', func: 'Tampon pH', risk: 'sans_risque', description: 'Tampon pH inerte.', risks: [] },
+  { code: 'disodium-phosphate', name: 'Phosphate disodique', func: 'Tampon pH', risk: 'sans_risque', description: 'Tampon pH inerte.', risks: [] },
   { code: 'hydroxyacetophenone', name: 'Hydroxyacetophenone', func: 'Antioxydant', risk: 'sans_risque', description: 'Antioxydant/stabilisant fréquent, alternative au phenoxyethanol en association.', risks: [] },
   { code: 'sodium-hydroxide', name: 'Sodium hydroxide (soude)', func: 'Ajusteur de pH', risk: 'sans_risque', description: 'Ajuste le pH de la formule ; entièrement neutralisé dans le produit fini.', risks: [] },
   { code: 'citric-acid', name: 'Acide citrique', func: 'Ajusteur de pH', risk: 'sans_risque', description: 'Ajuste le pH et chélate les métaux ; présent dans le citron.', risks: [] },
@@ -155,6 +184,22 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: 'hydrogenated-coco-glycerides', name: 'Glycérides de coco hydrogénés', func: 'Émollient', risk: 'sans_risque', description: 'Émollient végétal hydrogéné (texture baume).', risks: [] },
   { code: 'hydrogenated-rapeseed-oil', name: 'Huile de colza hydrogénée', func: 'Émollient', risk: 'sans_risque', description: 'Huile végétale hydrogénée (consistance).', risks: [] },
   { code: 'isopropyl-palmitate', name: 'Isopropyl palmitate', func: 'Émollient', risk: 'sans_risque', description: 'Ester d’acide palmitique, toucher sec.', risks: [] },
+  { code: 'caprylic-capric-triglyceride', name: 'Triglycérides caprylique/caprique', func: 'Émollient', risk: 'sans_risque', description: 'Huile de coco fractionnée : émollient léger au toucher non gras, très répandu dans les crèmes et sérums.', risks: [] },
+  { code: 'squalane', name: 'Squalane', func: 'Émollient biomimétique', risk: 'sans_risque', description: 'Émollient dérivé de l’olive ou de la canne à sucre, très proche du sébum humain.', risks: [] },
+  { code: 'ethylhexyl-palmitate', name: 'Ethylhexyl palmitate', func: 'Émollient', risk: 'sans_risque', description: 'Ester émollient au toucher sec (soins, démaquillants).', risks: [] },
+  { code: 'isopropyl-myristate', name: 'Isopropyl myristate', func: 'Émollient', risk: 'sans_risque', description: 'Ester sec très pénétrant (peut être comédogène sur le visage).', risks: [] },
+  { code: 'cetyl-palmitate', name: 'Cetyl palmitate', func: 'Émollient', risk: 'sans_risque', description: 'Ester d’alcool cétylique et d’acide palmitique (consistance des crèmes).', risks: [] },
+  { code: 'cetearyl-ethylhexanoate', name: 'Cetearyl ethylhexanoate', func: 'Émollient', risk: 'sans_risque', description: 'Ester fluide au toucher soie (lotions corporelles).', risks: [] },
+  { code: 'isononyl-isononanoate', name: 'Isononyl isononanoate', func: 'Émollient', risk: 'sans_risque', description: 'Ester sec émollient (textures légères).', risks: [] },
+  { code: 'hydrogenated-vegetable-oil', name: 'Huile végétale hydrogénée', func: 'Émollient', risk: 'sans_risque', description: 'Huile végétale solidifiée par hydrogénation (textures baumes).', risks: [] },
+  { code: 'hydrogenated-lecithin', name: 'Lécithine hydrogénée', func: 'Émulsifiant', risk: 'sans_risque', description: 'Lécithine stabilisée, émulsifiante (soja/tournesol).', risks: [] },
+  { code: 'phosphatidylcholine', name: 'Phosphatidylcholine', func: 'Émulsifiant', risk: 'sans_risque', description: 'Phospholipide (lécithine) : émulsions biomimétiques et encapsulation d’actifs.', risks: [] },
+  { code: 'cholesterol', name: 'Cholestérol', func: 'Émollient / Barrière', risk: 'sans_risque', description: 'Lipide du ciment intercellulaire (souvent issu de laine, versions végétales existent).', risks: ['Origine animale possible (laine)'] },
+  { code: 'cetearyl-olivate', name: 'Cetearyl Olivate', func: 'Émulsifiant', risk: 'sans_risque', description: 'Émulsifiant doux dérivé de l’huile d’olive (gel-crèmes).', risks: [] },
+  { code: 'sorbitan-olivate', name: 'Sorbitan Olivate', func: 'Émulsifiant', risk: 'sans_risque', description: 'Émulsifiant doux dérivé de l’huile d’olive, associé au cetearyl olivate.', risks: [] },
+  { code: 'polyglyceryl-3-methylglucose-distearate', name: 'Polyglyceryl-3 Methylglucose Distearate', func: 'Émulsifiant', risk: 'sans_risque', description: 'Émulsifiant doux végétal (glucose + glycerine).', risks: [] },
+  { code: 'methyl-glucose-sesquistearate', name: 'Methyl Glucose Sesquistearate', func: 'Émulsifiant', risk: 'sans_risque', description: 'Émulsifiant doux dérivé du glucose.', risks: [] },
+  { code: 'lecithin', name: 'Lécithine', func: 'Émulsifiant', risk: 'sans_risque', description: 'Lécithine naturelle (soja, tournesol) : émulsifie et nourrit.', risks: [] },
   { code: 'dibutyl-adipate', name: 'Dibutyl adipate', func: 'Émollient', risk: 'sans_risque', description: 'Diester émollient léger (émulsions solaires).', risks: [] },
   { code: 'butylene-glycol-dicaprylate', name: 'Butylene Glycol Dicaprylate', func: 'Émollient', risk: 'sans_risque', description: 'Diester émollient végétal au toucher sec.', risks: [] },
   { code: 'dicaprate', name: 'Dicaprate', func: 'Émollient', risk: 'sans_risque', description: 'Ester émollient (souvent fragment du butylene glycol dicaprylate).', risks: [] },
@@ -177,6 +222,11 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: 'niacinamide', name: 'Niacinamide (vitamine B3)', func: 'Actif uniformisant', risk: 'sans_risque', description: 'Vitamine B3 : unifie le teint, renforce la barrière cutanée.', risks: [] },
   { code: 'ascorbic-acid', name: 'Acide ascorbique (vitamine C)', func: 'Actif antioxydant', risk: 'sans_risque', description: 'Vitamine C pure : antioxydante et éclaircissante (instable en formule).', risks: [] },
   { code: 'caffeine', name: 'Caféine', func: 'Actif tonifiant', risk: 'sans_risque', description: 'Actif décongestionnant (cernes, cellulite).', risks: [] },
+  { code: 'bisabolol', name: 'Bisabolol', func: 'Actif apaisant', risk: 'sans_risque', description: 'Composant apaisant de la camomille (souvent synthétique végétal).', risks: [] },
+  { code: 'dipotassium-glycyrrhizate', name: 'Dipotassium glycyrrhizate', func: 'Actif apaisant', risk: 'sans_risque', description: 'Dérivé apaisant de la réglisse (peaux réactives).', risks: [] },
+  { code: 'ceramide-np', name: 'Ceramide NP', func: 'Actif barrière', risk: 'sans_risque', description: 'Céramide biomimétique du ciment intercellulaire (répare la barrière).', risks: [] },
+  { code: 'ceramide-ap', name: 'Ceramide AP', func: 'Actif barrière', risk: 'sans_risque', description: 'Céramide biomimétique (soins peaux sèches, atopiques).', risks: [] },
+  { code: 'ceramide-eop', name: 'Ceramide EOP', func: 'Actif barrière', risk: 'sans_risque', description: 'Céramide biomimétique (associée aux NP/AP dans les soins barrière).', risks: [] },
 
   // ── Agents de texture ──────────────────────────────────────
   { code: 'xanthan-gum', name: 'Gomme xanthane', func: 'Épaississant', risk: 'sans_risque', description: 'Gélifiant naturel par fermentation.', risks: [] },
@@ -220,6 +270,7 @@ const INGREDIENT_LIST: CosmeticIngredientInfo[] = [
   { code: 'parfum', name: 'Parfum (fragrance)', func: 'Parfum', risk: 'risque_limite', allergen: true, description: 'Composition parfumante protégée (recette secrète) : peut contenir des allergènes à déclaration obligatoire.', risks: ['Allergènes parfum possibles (non détaillés)'] },
   { code: 'fragrance', name: 'Fragrance (parfum)', func: 'Parfum', risk: 'risque_limite', allergen: true, description: 'Composition parfumante (équivalent INCI de « parfum »).', risks: ['Allergènes parfum possibles (non détaillés)'] },
   { code: 'linalool', name: 'Linalool', func: 'Composant parfum', risk: 'risque_limite', allergen: true, description: 'Allergène parfum naturel (lavande, coriandre) à déclaration obligatoire au-delà de 0,001 %.', risks: ['Allergène à déclaration obligatoire (UE)', 'S’oxyde en cas de vieillissement (plus allergisant)'] },
+  { code: 'linalyl-acetate', name: 'Linalyl acetate', func: 'Composant parfum', risk: 'risque_limite', allergen: true, description: 'Ester principal de l’huile essentielle de lavande ; allergène fragrance à déclaration obligatoire (liste UE étendue en 2023).', risks: ['Allergène fragrance à déclaration obligatoire (UE, 2023)'] },
   { code: 'limonene', name: 'Limonene', func: 'Composant parfum', risk: 'risque_limite', allergen: true, description: 'Allergène parfum des agrumes à déclaration obligatoire.', risks: ['Allergène à déclaration obligatoire (UE)', 'S’oxyde en cas de vieillissement (plus allergisant)'] },
   { code: 'citral', name: 'Citral', func: 'Composant parfum', risk: 'risque_limite', allergen: true, description: 'Allergène parfum (notes citronnées) à déclaration obligatoire.', risks: ['Allergène à déclaration obligatoire (UE)'] },
   { code: 'citronellol', name: 'Citronellol', func: 'Composant parfum', risk: 'risque_limite', allergen: true, description: 'Allergène parfum (rose, géranium) à déclaration obligatoire.', risks: ['Allergène à déclaration obligatoire (UE)'] },
@@ -271,6 +322,40 @@ const INGREDIENT_PATTERNS: IngredientPattern[] = [
     re: /-nitropropane-|-nitro-|-formaldehyde$/,
     info: { name: 'Libérateur de formaldéhyde', func: 'Conservateur', risk: 'a_risque', description: 'Conservateur libérateur de formaldéhyde, famille surveillée par le CIRC.', risks: ['Libère du formaldéhyde', 'Allergisant cutané'] },
   },
+  {
+    // Alcools gras éthoxylés (Steareth-20, Ceteareth-12, Laureth-4,
+    // Glycereth-26…) : mêmes réserves que les PEG (éthoxylation).
+    re: /^(?:steareth|ceteareth|laureth|myreth|oleth|isosteareth|glycereth|polysorbate)-?\d+/,
+    info: { name: 'Alcool gras éthoxylé', func: 'Émulsifiant / Solubilisant', risk: 'risque_limite', description: 'Émulsifiant issu de l’éthoxylation d’alcools gras (famille PEG) : efficace et doux d’emploi, mais renforce le passage des autres substances à travers la peau.', risks: ['Famille PEG (éthoxylation)', 'Renforce le passage d’autres substances'] },
+  },
+  {
+    re: /^ci-\d/,
+    info: { name: 'Colorant (Color Index)', func: 'Colorant', risk: 'sans_risque', description: 'Colorant référencé au Color Index (CI xxxxx). Les colorants à préoccupation documentée (ex : noir de goudron CI 77266) ont leur fiche dédiée.', risks: [] },
+  },
+  {
+    re: /-extract$/,
+    info: { name: 'Extrait végétal', func: 'Actif végétal', risk: 'sans_risque', description: 'Extrait de plante : les extraits végétaux sont généralement bien tolérés (allergènes exceptionnels selon la plante).', risks: [] },
+  },
+  {
+    re: /-oil$/,
+    info: { name: 'Huile végétale', func: 'Émollient', risk: 'sans_risque', description: 'Huile végétale émolliente et nourrissante (les exceptions notoires — huile minérale — ont leur fiche dédiée).', risks: [] },
+  },
+  {
+    re: /-water$/,
+    info: { name: 'Eau florale (hydrolat)', func: 'Solvant / Apaisant', risk: 'sans_risque', description: 'Eau florale (hydrolat) obtenue par distillation de plantes.', risks: [] },
+  },
+  {
+    re: /^ceramide/,
+    info: { name: 'Céramide', func: 'Actif barrière', risk: 'sans_risque', description: 'Lipide biomimétique du ciment intercellulaire : répare et consolide la barrière cutanée.', risks: [] },
+  },
+  {
+    re: /^polyacrylamide/,
+    info: { name: 'Polyacrylamide', func: 'Filmogène / Épaississant', risk: 'risque_limite', description: 'Polymère filmogène : les résidus de monomère acrylamide sont encadrés par la réglementation cosmétique.', risks: ['Résidus d’acrylamide encadrés (UE)'] },
+  },
+  {
+    re: /^acrylates/,
+    info: { name: 'Polymère acrylique', func: 'Agent de texture', risk: 'sans_risque', description: 'Polymère texturant inerte (gels aqueux, textures fluides).', risks: [] },
+  },
 ];
 
 export const COSMETIC_INGREDIENTS: Readonly<Record<string, CosmeticIngredientInfo>> = Object.fromEntries(
@@ -278,7 +363,9 @@ export const COSMETIC_INGREDIENTS: Readonly<Record<string, CosmeticIngredientInf
 );
 
 /**
- * Fiche d'un ingrédient INCI : correspondance exacte, puis motifs
+ * Fiche d'un ingrédient INCI : correspondance exacte, puis codes E
+ * (délégués à la base des additifs — Open Products Facts indexe ainsi
+ * certains composants : « e490 » propylène glycol…), puis motifs
  * génériques (PEG-x, *-paraben…). INCI inconnu → sans signalement
  * connu (pas de pénalité — inconnu ≠ controversé).
  */
@@ -286,6 +373,22 @@ export function getIngredientInfo(slug: string): CosmeticIngredientInfo {
   const code = slug.trim().toLowerCase();
   const exact = COSMETIC_INGREDIENTS[code];
   if (exact) return exact;
+
+  // Code E : même substance que l'additif alimentaire (évaluation
+  // toxicologique transposable), fiche réutilisée avec le niveau de
+  // risque du monde alimentaire — prudent.
+  if (/^e\d+[a-z]*$/.test(code)) {
+    const additive = getAdditiveInfo(code);
+    return {
+      code,
+      name: `${additive.name} (${code.toUpperCase()})`,
+      func: `Additif · ${additive.func}`,
+      risk: additive.risk,
+      description: `${additive.description} Ce composant est aussi référencé sous un numéro E dans les produits alimentaires.`,
+      risks: additive.risks,
+    };
+  }
+
   for (const { re, info } of INGREDIENT_PATTERNS) {
     if (re.test(code)) return { ...info, code };
   }
