@@ -40,6 +40,7 @@ export const upsertProductScan = asyncHandler(async (req: AuthedRequest, res: Re
       negatives: input.negatives,
       // undefined = pas de changement ; null explicite possible.
       additives: input.additives,
+      productType: input.productType ?? 'food',
       scannedAt: new Date(),
     },
     create: {
@@ -55,6 +56,7 @@ export const upsertProductScan = asyncHandler(async (req: AuthedRequest, res: Re
       positives: input.positives,
       negatives: input.negatives,
       additives: input.additives,
+      productType: input.productType ?? 'food',
     },
   });
 

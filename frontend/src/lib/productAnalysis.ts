@@ -6,14 +6,17 @@ import type {
   ScanGrade,
 } from '../types/analysis';
 import { CRITERION_LABELS } from '../types/analysis';
-import { HIGH_RISK_ADDITIVES } from './additives';
+import { getAdditiveInfo } from './additives';
 import { formatQty } from './utils';
 
 // ─────────────────────────────────────────────────────────────
 // Algorithme d'analyse (sans IA) — inspiré de la méthode Yuka :
-// - base Nutri-Score SANS protéines (les 8 critères affichés
+// - base Nutri-Score SANS protéines (les critères affichés
 //   pilotent exactement le score) mappée sur 100 points ;
-// - pénalités additifs et bonus bio sur le score final ;
+// - repli sur le Nutri-Score officiel OFF quand les nutriments
+//   indispensables manquent (score estimé, signalé `estimated`) ;
+// - pénalités additifs, NOVA 4 et huile de palme, bonus bio et
+//   Éco-Score sur le score final ;
 // - chaque critère bascule en qualité ou défaut selon des seuils
 //   réglementaires UE « low / high » par 100 g (spécifiques boissons).
 // Fonction pure : testable et rejouable à l'identique.
@@ -57,13 +60,24 @@ function fruitsVegetablesPoints(pct: number | null, isBeverage: boolean): number
 }
 
 // ── Additifs ─────────────────────────────────────────────────
-// Le classement détaillé (fiches, niveaux de risque) vit dans
-// lib/additives — ici, seule la pénalité de score utilise le groupe
-// « à risque » (source unique : HIGH_RISK_ADDITIVES).
+// Le classement détaillé (fiches, niveaux de risque, variantes
+// E322i → E322) vit dans lib/additives — ici, seule la pénalité de
+// score utilise le groupe « à risque » (source unique : la base,
+// via getAdditiveInfo).
 const ADDITIVES_PENALTY_CAP = 40;
 const HIGH_RISK_PENALTY = 10;
 const OTHER_ADDITIVE_PENALTY = 2;
 const BIO_BONUS = 5;
+
+// ── NOVA, huile de palme, Éco-Score, repli Nutri-Score ──────
+// Ajustements modérés : ils enrichissent la note sans la dénaturer
+// (l'ultra-transformation recoupe en partie la pénalité additifs).
+const NOVA4_PENALTY = 8;
+const PALM_OIL_PENALTY = 5;
+const ECOSCORE_BONUS = 3;
+/** Nutri-Score officiel OFF → score /100 estimé quand les nutriments
+    indispensables manquent (milieux des tranches de notre échelle). */
+const NUTRISCORE_FALLBACK: Record<string, number> = { a: 88, b: 72, c: 52, d: 30, e: 12 };
 
 // ── Seuils qualité / défaut (règlement UE « low / high », /100 g) ──
 // Boissons : sucres et calories 2× plus stricts (per 100 ml).
@@ -78,6 +92,7 @@ interface Thresholds {
   sodiumBadMg: number;
   fiberGood: number;
   fruitsVegetablesGood: number;
+  proteinsGood: number;
 }
 const SOLID_THRESHOLDS: Thresholds = {
   caloriesGood: 120,
@@ -90,6 +105,7 @@ const SOLID_THRESHOLDS: Thresholds = {
   sodiumBadMg: 600,
   fiberGood: 3,
   fruitsVegetablesGood: 40,
+  proteinsGood: 8,
 };
 const BEVERAGE_THRESHOLDS: Thresholds = {
   ...SOLID_THRESHOLDS,
@@ -97,6 +113,7 @@ const BEVERAGE_THRESHOLDS: Thresholds = {
   caloriesBad: 200,
   sugarsGood: 2.5,
   sugarsBad: 11.25,
+  proteinsGood: 3,
 };
 
 function criterion(key: CriterionKey, status: 'good' | 'bad', detail: string): AnalysisCriterion {
@@ -138,6 +155,7 @@ export function analyzeProduct(product: OffProduct): ProductAnalysis {
     nutriments.sodiumMg !== null;
 
   let score: number | null = null;
+  let estimated = false;
   if (hasBase) {
     const N =
       pointsFor(energyKj, isBeverage ? ENERGY_BEVERAGE : ENERGY_SOLID) +
@@ -149,6 +167,11 @@ export function analyzeProduct(product: OffProduct): ProductAnalysis {
       fruitsVegetablesPoints(product.fruitsVegetablesPct, isBeverage);
     // N ∈ [0..40], P ∈ [0..9] → s ∈ [-9..40] → mappé linéairement sur 0..100.
     score = Math.round(((40 - (N - P)) / 49) * 100);
+  } else if (product.nutriscoreGrade !== null) {
+    // Nutriments incomplets mais Nutri-Score officiel OFF connu :
+    // estimation repartant de sa note (les ajustements s'appliquent aussi).
+    score = NUTRISCORE_FALLBACK[product.nutriscoreGrade];
+    estimated = true;
   }
 
   // ── Critères qualité / défaut ─────────────────────────────
@@ -188,6 +211,9 @@ export function analyzeProduct(product: OffProduct): ProductAnalysis {
   if (nutriments.fiber !== null && nutriments.fiber >= th.fiberGood) {
     positives.push(criterion('fibres', 'good', per100(nutriments.fiber, 'g', isBeverage)));
   }
+  if (nutriments.proteins !== null && nutriments.proteins >= th.proteinsGood) {
+    positives.push(criterion('proteines', 'good', per100(nutriments.proteins, 'g', isBeverage)));
+  }
   if (product.fruitsVegetablesPct !== null && product.fruitsVegetablesPct >= th.fruitsVegetablesGood) {
     positives.push(criterion('fruits_legumes', 'good', `${formatQty(product.fruitsVegetablesPct)} %`));
   }
@@ -195,14 +221,37 @@ export function analyzeProduct(product: OffProduct): ProductAnalysis {
     positives.push(criterion('bio', 'good', 'Produit bio'));
   }
 
-  // ── Additifs : défaut + pénalité sur le score ─────────────
-  const highRisk = product.additives.filter((a) => HIGH_RISK_ADDITIVES.has(a));
+  // ── NOVA (degré de transformation) ────────────────────────
+  if (product.novaGroup === 1) {
+    positives.push(criterion('nova', 'good', 'Groupe NOVA 1'));
+  } else if (product.novaGroup === 4) {
+    negatives.push(criterion('nova', 'bad', 'Groupe NOVA 4'));
+  }
+
+  // ── Huile de palme ────────────────────────────────────────
+  if (product.palmOilCount !== null && product.palmOilCount > 0) {
+    negatives.push(criterion('palme', 'bad', `${product.palmOilCount} ingrédient${product.palmOilCount > 1 ? 's' : ''} palmier`));
+  }
+
+  // ── Éco-Score (impact environnemental OFF) ────────────────
+  if (product.ecoscoreGrade === 'a' || product.ecoscoreGrade === 'b') {
+    positives.push(criterion('ecoscore', 'good', `Éco-Score ${product.ecoscoreGrade.toUpperCase()}`));
+  } else if (product.ecoscoreGrade === 'd' || product.ecoscoreGrade === 'e') {
+    negatives.push(criterion('ecoscore', 'bad', `Éco-Score ${product.ecoscoreGrade.toUpperCase()}`));
+  }
+
+  // ── Additifs : qualité / défaut + pénalité sur le score ────
+  const highRisk = product.additives.filter((a) => getAdditiveInfo(a).risk === 'a_risque');
   if (product.additives.length > 0) {
     const count = product.additives.length;
     const withRisk = highRisk.length > 0 ? ` dont ${highRisk.length} à risque` : '';
     negatives.push(
       criterion('additifs', 'bad', `${count} additif${count > 1 ? 's' : ''}${withRisk}`),
     );
+  } else if (product.additivesN === 0) {
+    // Compteur explicite OFF à 0 : l'absence d'additifs est avérée
+    // (une simple liste vide sans compteur peut signifier « donnée manquante »).
+    positives.push(criterion('additifs', 'good', '0 additif'));
   }
 
   if (score !== null) {
@@ -211,7 +260,18 @@ export function analyzeProduct(product: OffProduct): ProductAnalysis {
       highRisk.length * HIGH_RISK_PENALTY +
         (product.additives.length - highRisk.length) * OTHER_ADDITIVE_PENALTY,
     );
-    score = Math.max(0, Math.min(100, score - penalty + (product.isBio ? BIO_BONUS : 0)));
+    const novaPenalty = product.novaGroup === 4 ? NOVA4_PENALTY : 0;
+    const palmPenalty =
+      product.palmOilCount !== null && product.palmOilCount > 0 ? PALM_OIL_PENALTY : 0;
+    const ecoscoreBonus =
+      product.ecoscoreGrade === 'a' || product.ecoscoreGrade === 'b' ? ECOSCORE_BONUS : 0;
+    score = Math.max(
+      0,
+      Math.min(
+        100,
+        score - penalty - novaPenalty - palmPenalty + (product.isBio ? BIO_BONUS : 0) + ecoscoreBonus,
+      ),
+    );
   }
 
   return {
@@ -219,5 +279,6 @@ export function analyzeProduct(product: OffProduct): ProductAnalysis {
     grade: score === null ? 'inconnu' : gradeFor(score),
     positives,
     negatives,
+    ...(estimated ? { estimated: true } : {}),
   };
 }

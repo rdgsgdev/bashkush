@@ -3,7 +3,7 @@ import { api } from './client';
 import { queryKeys } from './keys';
 import { queryPersisterOption } from './persist';
 import { runOfflineAware } from '../offline/queue';
-import type { AnalysisCriterion, ProductScan, ScanGrade } from '../types/analysis';
+import type { AnalysisCriterion, ProductScan, ProductType, ScanGrade } from '../types/analysis';
 
 /**
  * Historique des produits analysés, offline-aware :
@@ -40,8 +40,11 @@ export interface SaveProductScanInput {
   grade: ScanGrade;
   positives: AnalysisCriterion[];
   negatives: AnalysisCriterion[];
-  /** Tags additifs (« e250 », « e951 »…) : fiches détaillées dans la modale. */
+  /** Tags additifs (« e250 »…) ou ingrédients INCI (« phenoxyethanol »…) :
+      fiches détaillées dans la modale de détail. */
   additives?: string[];
+  /** Alimentaire (Open Food Facts, défaut) ou cosmétique (Open Beauty Facts). */
+  productType?: ProductType;
 }
 
 export async function saveProductScan(input: SaveProductScanInput): Promise<ProductScan> {
@@ -58,6 +61,7 @@ export async function saveProductScan(input: SaveProductScanInput): Promise<Prod
     positives: input.positives,
     negatives: input.negatives,
     additives: input.additives ?? null,
+    productType: input.productType ?? 'food',
     scannedAt: now,
     createdAt: now,
     updatedAt: now,
@@ -95,6 +99,7 @@ export function useSaveProductScan() {
         positives: input.positives,
         negatives: input.negatives,
         additives: input.additives ?? null,
+        productType: input.productType ?? 'food',
         scannedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

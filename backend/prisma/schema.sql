@@ -193,6 +193,7 @@ CREATE TABLE "product_scans" (
     "positives" JSONB NOT NULL,
     "negatives" JSONB NOT NULL,
     "additives" JSONB,
+    "product_type" TEXT NOT NULL DEFAULT 'food',
     "scanned_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,

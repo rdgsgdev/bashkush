@@ -281,20 +281,21 @@ model GroceryAisle {
 // score null → données nutritionnelles insuffisantes.
 
 model ProductScan {
-  id        String   @id @default(uuid())
-  familyId  String   @map("family_id")
-  barcode   String // code-barres (EAN-8 / EAN-13 / UPC)
-  name      String
-  brand     String? // marque(s), séparées par des virgules (Open Food Facts)
-  imageUrl  String?  @map("image_url") // image du produit (hébergée par Open Food Facts)
-  score     Int? // note /100 (null si données insuffisantes)
-  grade     String // bon | moyen | mauvais | tres_mauvais | inconnu
-  positives Json // qualités : [{ key, label, status, detail }]
-  negatives Json // défauts : [{ key, label, status, detail }]
-  additives Json? // tags additifs Open Food Facts (["e250", "e951"]…) — null pour les anciens scans
-  scannedAt DateTime @default(now()) @map("scanned_at") // dernier scan
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  familyId    String   @map("family_id")
+  barcode     String // code-barres (EAN-8 / EAN-13 / UPC)
+  name        String
+  brand       String? // marque(s), séparées par des virgules (Open Food Facts)
+  imageUrl    String?  @map("image_url") // image du produit (hébergée par Open Food Facts / Open Beauty Facts)
+  score       Int? // note /100 (null si données insuffisantes)
+  grade       String // bon | moyen | mauvais | tres_mauvais | inconnu
+  positives   Json // qualités : [{ key, label, status, detail }]
+  negatives   Json // défauts : [{ key, label, status, detail }]
+  additives   Json? // tags additifs OFF (["e250"]) ou slugs INCI OBF (["phenoxyethanol"]) — null pour les anciens scans
+  productType String   @default("food") @map("product_type") // food | cosmetic
+  scannedAt   DateTime @default(now()) @map("scanned_at") // dernier scan
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   family Family @relation(fields: [familyId], references: [id])
 
